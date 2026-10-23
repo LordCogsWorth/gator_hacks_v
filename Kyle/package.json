@@ -1,0 +1,15 @@
+{
+  "name": "kyle-motion-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Movement ingest server for Kyle's Apple Watch data",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "test": "node server/test_smoke.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
