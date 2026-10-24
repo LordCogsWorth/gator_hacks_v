@@ -47,7 +47,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </nav>
         <button
           onClick={openSigns}
-          className="mt-auto flex min-h-[56px] items-center gap-3 rounded-xl border border-red-800 bg-red-950 px-4 text-left text-base font-semibold text-red-200"
+          className="mt-auto flex min-h-[60px] items-center gap-3 rounded-xl border border-red-800 bg-red-950 px-4 text-left text-base font-semibold text-red-200"
         >
           <TriangleAlert className="h-5 w-5 shrink-0" />
           Stroke warning signs
@@ -68,7 +68,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <VoiceToggle />
             <button
               onClick={openSigns}
-              className="flex min-h-[48px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-red-700 px-3 text-base font-semibold text-white sm:px-4"
+              className="flex min-h-[60px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-red-700 px-3 text-base font-semibold text-white sm:px-4"
             >
               <Phone className="h-5 w-5" /> Call 911
             </button>
@@ -125,7 +125,7 @@ function NavItem({ to, label, icon: Icon, end }: (typeof NAV)[number]) {
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex min-h-[52px] shrink-0 items-center gap-3 rounded-xl px-4 text-lg font-medium transition-colors ${
+        `flex min-h-[60px] shrink-0 items-center gap-3 rounded-xl px-4 text-lg font-medium transition-colors ${
           isActive ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-300 hover:bg-neutral-800'
         }`
       }
@@ -161,7 +161,7 @@ function VoiceToggle() {
       onClick={() => setMuted(!muted)}
       aria-label={muted ? 'Voice off, tap to turn the voice on' : 'Voice on, tap to turn the voice off'}
       title={muted ? 'Voice off' : 'Voice on'}
-      className="flex min-h-[48px] items-center gap-2 rounded-xl border border-neutral-700 px-3 text-base font-medium sm:px-4"
+      className="flex min-h-[60px] items-center gap-2 rounded-xl border border-neutral-700 px-3 text-base font-medium sm:px-4"
     >
       {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
       <span className="hidden sm:inline">{muted ? 'Voice off' : 'Voice on'}</span>
