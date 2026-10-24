@@ -66,12 +66,12 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
             <VoiceToggle />
-            <button
-              onClick={openSigns}
+            <a
+              href="tel:911"
               className="flex min-h-[60px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-red-700 px-3 text-base font-semibold text-white sm:px-4"
             >
               <Phone className="h-5 w-5" /> Call 911
-            </button>
+            </a>
             <div className="hidden items-center gap-3 border-l border-neutral-800 pl-4 sm:flex">
               <Initials name={patient.name} />
               <div className="leading-tight">
@@ -85,11 +85,19 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Narrow screens: the sidebar becomes a tab bar fixed to the bottom, every item visible. */}
         <nav
           aria-label="Main"
-          className="fixed inset-x-0 bottom-0 z-40 flex border-t border-neutral-800 bg-neutral-900 px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden"
+          className="fixed inset-x-0 bottom-0 z-40 flex border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden"
         >
           {NAV.map((n) => (
             <TabItem key={n.to} {...n} />
           ))}
+          {/* No room for this in the phone header, so it lives here (the sidebar has its own). */}
+          <button
+            onClick={openSigns}
+            className="flex min-h-[64px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-0 text-center text-sm font-semibold leading-tight text-red-300 hover:bg-neutral-800"
+          >
+            <TriangleAlert className="h-6 w-6" />
+            Warning signs
+          </button>
         </nav>
 
         {/* Bottom padding on narrow screens keeps content clear of the fixed tab bar. */}
@@ -143,7 +151,7 @@ function TabItem({ to, short, icon: Icon, end }: (typeof NAV)[number]) {
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex min-h-[64px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-sm font-medium transition-colors ${
+        `flex min-h-[64px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-0 text-sm font-medium transition-colors ${
           isActive ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-300 hover:bg-neutral-800'
         }`
       }
