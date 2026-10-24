@@ -7,13 +7,13 @@ export function Layout({ children }: { children: ReactNode }) {
   const [muted, setMuted] = useMuted();
 
   return (
-    <div className="min-h-screen bg-white text-slate-950">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-200 px-4 py-3 sm:px-8">
-        <div className="text-2xl font-extrabold text-blue-800">RehabTrack</div>
+    <div className="min-h-screen bg-neutral-950 text-neutral-50">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-neutral-800 px-4 py-3 sm:px-8">
+        <div className="text-2xl font-extrabold text-neutral-50">RehabTrack</div>
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setMuted(!muted)}
-            className="min-h-[60px] rounded-2xl border-2 border-slate-400 px-5 text-lg font-bold"
+            className="min-h-[60px] rounded-2xl border-2 border-neutral-500 px-5 text-lg font-bold"
             aria-pressed={!muted}
           >
             {muted ? '🔇 Voice off' : '🔊 Voice on'}
@@ -38,15 +38,15 @@ export function Layout({ children }: { children: ReactNode }) {
 function WarningSigns({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-lg rounded-3xl bg-white p-6">
-        <h2 className="text-3xl font-extrabold text-red-700">Call 911 right away if you notice:</h2>
+      <div className="w-full max-w-lg rounded-3xl border-2 border-neutral-700 bg-neutral-900 p-6">
+        <h2 className="text-3xl font-extrabold text-red-400">Call 911 right away if you notice:</h2>
         <ul className="mt-4 space-y-3 text-2xl">
           <li>😶 <b>Face</b> drooping on one side</li>
           <li>💪 <b>Arm</b> suddenly weak or numb</li>
           <li>🗣 <b>Speech</b> slurred or hard to understand</li>
         </ul>
         <p className="mt-4 text-xl">Note the time it started. Do not wait to see if it goes away.</p>
-        <p className="mt-2 text-lg text-slate-600">This app cannot detect a stroke.</p>
+        <p className="mt-2 text-lg text-neutral-400">This app cannot detect a stroke.</p>
         <a href="tel:911" className="mt-5 flex min-h-[72px] items-center justify-center rounded-2xl bg-red-700 text-2xl font-extrabold text-white">
           📞 Call 911
         </a>
@@ -72,8 +72,8 @@ export function BigButton({
   disabled?: boolean;
 }) {
   const styles = {
-    primary: 'bg-blue-800 text-white',
-    secondary: 'border-2 border-slate-500 bg-white text-slate-950',
+    primary: 'bg-neutral-100 text-neutral-950',
+    secondary: 'border-2 border-neutral-500 bg-neutral-900 text-neutral-50',
     danger: 'bg-red-700 text-white',
   }[variant];
   return (

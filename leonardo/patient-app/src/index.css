@@ -8,12 +8,13 @@ html {
 }
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background: #fff;
+  background: #0a0a0a;
+  color-scheme: dark;
 }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 4px solid #1e40af;
+  outline: 4px solid #f5f5f5;
   outline-offset: 3px;
 }
 
@@ -30,15 +31,64 @@ input:focus-visible {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: #fff;
-  border: 6px solid #0f172a;
+  background: #0a0a0a;
+  border: 6px solid #f5f5f5;
   cursor: pointer;
 }
 .pain-slider::-moz-range-thumb {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: #fff;
-  border: 6px solid #0f172a;
+  background: #0a0a0a;
+  border: 6px solid #f5f5f5;
   cursor: pointer;
+}
+
+/* Coach avatar animations (components/ExerciseAvatar.tsx). Origins are set inline in SVG units. */
+.coach-raise,
+.coach-reach-upper,
+.coach-reach-fore,
+.coach-finger,
+.coach-thumb {
+  transform-box: view-box;
+  animation-duration: 3.2s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+.coach-raise { animation-name: coach-raise; }
+.coach-reach-upper { animation-name: coach-reach-upper; }
+.coach-reach-fore { animation-name: coach-reach-fore; }
+.coach-finger { animation-name: coach-finger; }
+.coach-thumb { animation-name: coach-thumb; }
+.coach-spark { animation: coach-spark 3.2s ease-in-out infinite; }
+
+@keyframes coach-raise {
+  0%, 12% { transform: rotate(0deg); }
+  50%, 62% { transform: rotate(-95deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes coach-reach-upper {
+  0%, 12% { transform: rotate(0deg); }
+  50%, 62% { transform: rotate(-82deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes coach-reach-fore {
+  0%, 12% { transform: rotate(-90deg); }
+  50%, 62% { transform: rotate(0deg); }
+  100% { transform: rotate(-90deg); }
+}
+@keyframes coach-finger {
+  0%, 12% { transform: scaleY(0.3); }
+  50%, 62% { transform: scaleY(1); }
+  100% { transform: scaleY(0.3); }
+}
+@keyframes coach-thumb {
+  0%, 12% { transform: rotate(35deg); }
+  50%, 62% { transform: rotate(0deg); }
+  100% { transform: rotate(35deg); }
+}
+@keyframes coach-spark {
+  0%, 30% { opacity: 0; }
+  50%, 62% { opacity: 1; }
+  80%, 100% { opacity: 0; }
 }

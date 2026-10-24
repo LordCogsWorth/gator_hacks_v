@@ -6,6 +6,7 @@ import { getCurrentPlan, getPatient } from '../api';
 import { tracker } from '../camera';
 import type { TrackingFrame } from '../camera/types';
 import { CameraView } from '../components/CameraView';
+import { ExerciseExplainer } from '../components/ExerciseAvatar';
 import { BigButton } from '../components/Layout';
 import { EXERCISES, SHOULDER_HIKE_LIMIT, TRUNK_LEAN_LIMIT_DEG } from '../data/exercises';
 import { RepCounter } from '../session/repCounter';
@@ -13,7 +14,7 @@ import { useSession, type Step } from '../session/SessionContext';
 import type { Side } from '../types';
 import { speak } from '../voice/useVoice';
 
-type Phase = 'setup' | 'countdown' | 'active' | 'done';
+type Phase = 'explain' | 'setup' | 'countdown' | 'active' | 'done';
 
 const ROUND_TIMEOUT_MS = 90_000;
 const SMOOTH_FRAMES = 5;
@@ -29,7 +30,7 @@ export function SessionRun() {
   const healthySide: Side = patient.weak_side === 'right' ? 'left' : 'right';
 
   const [step, setStep] = useState<Step>({ exerciseIndex: 0, role: 'healthy' });
-  const [phase, setPhase] = useState<Phase>('setup');
+  const [phase, setPhase] = useState<Phase>('explain');
   const [countdown, setCountdown] = useState(3);
   const [value, setValue] = useState(0);
   const [reps, setReps] = useState(0);
@@ -63,8 +64,7 @@ export function SessionRun() {
     setWarning(null);
     setBodySeen(false);
     if (step.role === 'healthy') {
-      setPhase('setup');
-      speak(`${info.title}. ${info.cameraSetup}`);
+      setPhase('explain');
     } else {
       setPhase('countdown');
     }
@@ -181,14 +181,25 @@ export function SessionRun() {
         <h1 className="text-3xl font-extrabold sm:text-4xl">
           {step.exerciseIndex + 1}/{plan.exercises.length} · {info.title}
         </h1>
-        {phase !== 'setup' && (
-          <span className={`rounded-full px-4 py-1 text-2xl font-bold text-white ${step.role === 'healthy' ? 'bg-slate-700' : 'bg-blue-800'}`}>
+        {phase !== 'setup' && phase !== 'explain' && (
+          <span className={`rounded-full px-4 py-1 text-2xl font-bold text-white ${step.role === 'healthy' ? 'bg-neutral-800' : 'bg-neutral-600'}`}>
             {roundLabel}
           </span>
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
+      {phase === 'explain' && (
+        <ExerciseExplainer
+          info={info}
+          onStart={() => {
+            setPhase('setup');
+            speak(info.cameraSetup);
+          }}
+        />
+      )}
+
+      {/* Hidden (not removed) while the coach explains, so the camera keeps running. */}
+      <div className={`grid gap-4 lg:grid-cols-[1fr_220px] ${phase === 'explain' ? 'hidden' : ''}`}>
         <div className="relative">
           <CameraView onFrame={onFrame} outline={phase === 'setup'} />
           {phase === 'setup' && (
@@ -209,7 +220,7 @@ export function SessionRun() {
             </Overlay>
           )}
           {phase === 'active' && warning && (
-            <div className="absolute inset-x-3 top-3 rounded-2xl bg-amber-400 px-4 py-3 text-center text-3xl font-extrabold text-slate-950">
+            <div className="absolute inset-x-3 top-3 rounded-2xl bg-amber-400 px-4 py-3 text-center text-3xl font-extrabold text-neutral-950">
               ⚠ {warning}
             </div>
           )}
@@ -217,11 +228,11 @@ export function SessionRun() {
 
         <div className="flex gap-4 lg:flex-col">
           <Bar value={value} max={info.scaleMax} goal={goal} unit={info.unit} />
-          <div className="flex flex-1 flex-col justify-center rounded-3xl bg-slate-100 p-4 text-center">
-            <div className="text-xl text-slate-700">Reps</div>
+          <div className="flex flex-1 flex-col justify-center rounded-3xl bg-neutral-900 p-4 text-center">
+            <div className="text-xl text-neutral-300">Reps</div>
             <div className="text-6xl font-extrabold">
               {reps}
-              <span className="text-3xl text-slate-600">/{planEx.reps}</span>
+              <span className="text-3xl text-neutral-400">/{planEx.reps}</span>
             </div>
           </div>
         </div>
@@ -242,7 +253,7 @@ export function SessionRun() {
 function Overlay({ children }: { children: ReactNode }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center p-4">
-      <div className="max-w-xl rounded-3xl bg-white/95 p-6 text-center shadow-xl">{children}</div>
+      <div className="max-w-xl rounded-3xl bg-neutral-900/95 p-6 text-center shadow-xl">{children}</div>
     </div>
   );
 }
@@ -252,17 +263,17 @@ function Bar({ value, max, goal, unit }: { value: number; max: number; goal: num
   const pct = (x: number) => `${Math.min(100, Math.max(0, (x / max) * 100))}%`;
   const reached = goal !== null && value >= goal * 0.98;
   return (
-    <div className="relative h-72 w-32 shrink-0 overflow-hidden rounded-3xl border-4 border-slate-400 bg-slate-100 lg:h-96 lg:w-full">
+    <div className="relative h-72 w-32 shrink-0 overflow-hidden rounded-3xl border-4 border-neutral-500 bg-neutral-900 lg:h-96 lg:w-full">
       <div
-        className={`absolute inset-x-0 bottom-0 transition-[height] duration-100 ${reached ? 'bg-green-600' : 'bg-blue-700'}`}
+        className={`absolute inset-x-0 bottom-0 transition-[height] duration-100 ${reached ? 'bg-green-600' : 'bg-neutral-300'}`}
         style={{ height: pct(value) }}
       />
       {goal !== null && (
-        <div className="absolute inset-x-0 border-t-[6px] border-dashed border-slate-950" style={{ bottom: pct(goal) }}>
-          <span className="absolute right-1 -top-9 rounded bg-slate-950 px-2 text-lg font-bold text-white">Goal</span>
+        <div className="absolute inset-x-0 border-t-[6px] border-dashed border-neutral-50" style={{ bottom: pct(goal) }}>
+          <span className="absolute right-1 -top-9 rounded bg-neutral-50 px-2 text-lg font-bold text-neutral-950">Goal</span>
         </div>
       )}
-      <div className="absolute inset-x-0 top-3 text-center text-4xl font-extrabold text-slate-950 drop-shadow">
+      <div className="absolute inset-x-0 top-3 text-center text-4xl font-extrabold text-white mix-blend-difference">
         {Math.round(value)}
         {unit}
       </div>

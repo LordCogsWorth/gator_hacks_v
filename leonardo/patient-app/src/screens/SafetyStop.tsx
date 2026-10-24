@@ -42,7 +42,7 @@ export function SafetyStop() {
     <div className="space-y-6">
       <h1 className="text-4xl font-extrabold">Time to rest</h1>
       <p className="text-3xl leading-snug">{message}</p>
-      <div className="rounded-3xl border-4 border-red-700 bg-red-50 p-5 text-2xl">
+      <div className="rounded-3xl border-4 border-red-700 bg-red-950 p-5 text-2xl">
         If you have <b>face drooping</b>, <b>arm weakness</b> or <b>trouble speaking</b>, call 911 now.
       </div>
       <BigButton className="w-full" onClick={() => navigate('/patient')}>

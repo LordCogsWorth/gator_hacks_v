@@ -22,9 +22,11 @@ With no camera (or before Stuti's module is plugged in), the skeleton and number
 | --- | --- | --- |
 | `/patient` | `Home.tsx` | Start button, today's 3 exercises, streak, days to next check-in |
 | `/patient/checkin` | `CheckIn.tsx` | Pain 0–10 slider + tiredness emoji. Pain 7+ → safety stop |
-| `/patient/session` | `SessionRun.tsx` | Camera setup → healthy arm → weak arm, for each exercise. Voice rep count, goal line, "Sit back" warning |
+| `/patient/session` | `SessionRun.tsx` | For each exercise: coach avatar explains it (`components/ExerciseAvatar.tsx`) → camera setup → healthy arm → weak arm. Voice rep count, goal line, "Sit back" warning |
 | `/patient/summary` | `Summary.tsx` | "Weak arm reached 64% of your healthy arm — up from 58% last week", streak, save |
 | `/patient/stop` | `SafetyStop.tsx` | Pain or dizziness: end the session, show advice |
+| `/patient/history` | `History.tsx` | Every past session, newest first; tap one for each arm's numbers |
+| `/patient/progress` | `Progress.tsx` | Stock-style chart of weak-arm % per session (Recharts), per exercise or all |
 
 The red "Stroke warning signs — call 911" button is in the header of every screen (`components/Layout.tsx`).
 

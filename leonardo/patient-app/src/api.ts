@@ -56,6 +56,32 @@ export function symmetryFor(results: ExerciseResult[], sessionId: string, exerci
   return Math.round((weak.best_value / healthy.best_value) * 100);
 }
 
+export interface SessionSummary {
+  session: Session;
+  /** 1 = the patient's first session. */
+  number: number;
+  symmetry: Partial<Record<ExerciseId, number>>;
+  /** Mean symmetry across the exercises done that session; null if none were finished. */
+  average: number | null;
+  results: ExerciseResult[];
+}
+
+/** Every session, oldest first, with its symmetry % per exercise. */
+export function getSessionSummaries(): SessionSummary[] {
+  const results = getResults();
+  return getSessions().map((session, i) => {
+    const mine = results.filter((r) => r.session_id === session.id);
+    const symmetry: Partial<Record<ExerciseId, number>> = {};
+    for (const ex of new Set(mine.map((r) => r.exercise))) {
+      const s = symmetryFor(mine, session.id, ex);
+      if (s !== null) symmetry[ex] = s;
+    }
+    const vals = Object.values(symmetry);
+    const average = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+    return { session, number: i + 1, symmetry, average, results: mine };
+  });
+}
+
 /** Days in a row with a session, counting back from today (or yesterday if not done yet today). */
 export function streakDays(sessions: Session[]): number {
   const days = new Set(sessions.map((s) => new Date(s.started_at).toDateString()));

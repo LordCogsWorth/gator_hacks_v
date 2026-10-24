@@ -59,13 +59,13 @@ export function Summary() {
 
       <ul className="space-y-4">
         {lines.map((l) => (
-          <li key={l.name} className="rounded-3xl border-2 border-slate-300 p-5">
-            <div className="text-xl font-bold text-slate-700">{EXERCISES[l.name].title}</div>
+          <li key={l.name} className="rounded-3xl border-2 border-neutral-700 p-5">
+            <div className="text-xl font-bold text-neutral-300">{EXERCISES[l.name].title}</div>
             {l.today === null ? (
               <div className="text-2xl">Not finished today.</div>
             ) : (
               <div className="mt-1 flex flex-wrap items-baseline gap-x-4">
-                <span className="text-6xl font-extrabold text-blue-800">{l.today}%</span>
+                <span className="text-6xl font-extrabold text-neutral-50">{l.today}%</span>
                 <span className="text-2xl">{sentence(l.name, l.today, l.before)}</span>
               </div>
             )}
@@ -73,16 +73,19 @@ export function Summary() {
         ))}
       </ul>
 
-      <div className="flex flex-wrap items-center gap-4 rounded-3xl bg-slate-100 p-5 text-2xl">
+      <div className="flex flex-wrap items-center gap-4 rounded-3xl bg-neutral-900 p-5 text-2xl">
         {streak !== null && <span className="font-extrabold">🔥 {streak} days in a row</span>}
-        <span className="text-slate-700">
+        <span className="text-neutral-300">
           {saved === 'saving' ? 'Saving…' : saved === 'saved' ? '✓ Sent to your care team' : 'Could not save — will retry'}
         </span>
       </div>
 
-      <BigButton className="w-full" onClick={() => navigate('/patient')}>
-        Done
-      </BigButton>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <BigButton variant="secondary" onClick={() => navigate('/patient/progress')}>
+          📈 See my progress
+        </BigButton>
+        <BigButton onClick={() => navigate('/patient')}>Done</BigButton>
+      </div>
     </div>
   );
 }

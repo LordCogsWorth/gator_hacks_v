@@ -20,6 +20,19 @@ export function speak(text: string, { interrupt = true } = {}) {
   speechSynthesis.speak(u);
 }
 
+/** Speak several lines in a row; `onLine(i)` fires as each one starts (to highlight it on screen). */
+export function speakLines(lines: string[], onLine?: (i: number) => void) {
+  if (muted || typeof speechSynthesis === 'undefined') return;
+  speechSynthesis.cancel();
+  lines.forEach((text, i) => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95;
+    u.lang = 'en-US';
+    u.onstart = () => onLine?.(i);
+    speechSynthesis.speak(u);
+  });
+}
+
 export function setMuted(m: boolean) {
   muted = m;
   if (m && typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();

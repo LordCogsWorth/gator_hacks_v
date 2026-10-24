@@ -4,7 +4,7 @@ import { BigButton } from '../components/Layout';
 import { useSession } from '../session/SessionContext';
 import { speak, useSpeakOnMount } from '../voice/useVoice';
 
-const TIREDNESS = [
+export const TIREDNESS = [
   { v: 1, emoji: '😀', label: 'Full of energy' },
   { v: 2, emoji: '🙂', label: 'Fine' },
   { v: 3, emoji: '😐', label: 'A bit tired' },
@@ -32,11 +32,11 @@ export function CheckIn() {
     <div className="space-y-8">
       <h1 className="text-4xl font-extrabold">Quick check-in</h1>
 
-      <section className="rounded-3xl bg-slate-100 p-6">
+      <section className="rounded-3xl bg-neutral-900 p-6">
         <h2 className="text-3xl font-bold">Pain today</h2>
         <div className="mt-2 flex items-baseline gap-3">
           <span className="text-7xl font-extrabold">{pain}</span>
-          <span className="text-2xl text-slate-700">out of 10</span>
+          <span className="text-2xl text-neutral-300">out of 10</span>
         </div>
         <input
           type="range"
@@ -49,7 +49,7 @@ export function CheckIn() {
           aria-label="Pain today, 0 to 10"
           className="pain-slider mt-4 w-full"
         />
-        <div className="mt-1 flex justify-between text-xl text-slate-700">
+        <div className="mt-1 flex justify-between text-xl text-neutral-300">
           <span>0 · No pain</span>
           <span>10 · Worst</span>
         </div>
@@ -67,7 +67,7 @@ export function CheckIn() {
               }}
               aria-pressed={tired === t.v}
               className={`flex min-h-[120px] flex-col items-center justify-center rounded-2xl border-4 p-2 ${
-                tired === t.v ? 'border-blue-800 bg-blue-50' : 'border-slate-300'
+                tired === t.v ? 'border-neutral-100 bg-neutral-800' : 'border-neutral-700'
               }`}
             >
               <span className="text-5xl">{t.emoji}</span>

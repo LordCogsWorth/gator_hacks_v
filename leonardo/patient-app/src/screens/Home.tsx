@@ -28,7 +28,7 @@ export function Home() {
       <h1 className="text-4xl font-extrabold">Hello, {patient.name}</h1>
 
       {newPlan && (
-        <div className="rounded-3xl border-4 border-blue-800 bg-blue-50 p-5 text-2xl">
+        <div className="rounded-3xl border-4 border-neutral-100 bg-neutral-800 p-5 text-2xl">
           <b>Your care team updated your plan.</b> {plan.approved_by ? `Approved by ${plan.approved_by}.` : ''}
         </div>
       )}
@@ -43,6 +43,15 @@ export function Home() {
         {doneToday ? 'Do another session' : "▶ Start today's session"}
       </BigButton>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <BigButton variant="secondary" onClick={() => navigate('/patient/history')}>
+          📋 Past sessions
+        </BigButton>
+        <BigButton variant="secondary" onClick={() => navigate('/patient/progress')}>
+          📈 My progress
+        </BigButton>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Stat label="Days in a row" value={`🔥 ${streak}`} />
         <Stat
@@ -55,16 +64,16 @@ export function Home() {
         <h2 className="text-3xl font-bold">Today's exercises</h2>
         <ol className="mt-3 space-y-3">
           {plan.exercises.map((ex, i) => (
-            <li key={ex.name} className="flex items-center gap-4 rounded-2xl border-2 border-slate-300 p-4 text-2xl">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-800 font-extrabold text-white">
+            <li key={ex.name} className="flex items-center gap-4 rounded-2xl border-2 border-neutral-700 p-4 text-2xl">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-600 font-extrabold text-white">
                 {i + 1}
               </span>
               <span className="font-bold">{EXERCISES[ex.name].title}</span>
-              <span className="ml-auto text-slate-700">{ex.reps} times each arm</span>
+              <span className="ml-auto text-neutral-300">{ex.reps} times each arm</span>
             </li>
           ))}
         </ol>
-        <p className="mt-3 text-xl text-slate-700">About 10–15 minutes. Your {patient.weak_side === 'right' ? 'left' : 'right'} arm goes first each time.</p>
+        <p className="mt-3 text-xl text-neutral-300">About 10–15 minutes. Your {patient.weak_side === 'right' ? 'left' : 'right'} arm goes first each time.</p>
       </section>
     </div>
   );
@@ -72,8 +81,8 @@ export function Home() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl bg-slate-100 p-5">
-      <div className="text-xl text-slate-700">{label}</div>
+    <div className="rounded-3xl bg-neutral-900 p-5">
+      <div className="text-xl text-neutral-300">{label}</div>
       <div className="text-4xl font-extrabold">{value}</div>
     </div>
   );

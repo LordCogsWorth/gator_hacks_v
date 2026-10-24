@@ -44,7 +44,7 @@ export function CameraView({ onFrame, outline = false }: { onFrame?: (f: Trackin
   }, []);
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-3xl bg-slate-900">
+    <div className="relative aspect-video w-full overflow-hidden rounded-3xl bg-neutral-900">
       {/* Mirrored like a selfie so moving your right arm moves the right side of the picture. */}
       <video ref={video} muted playsInline className="absolute inset-0 h-full w-full -scale-x-100 object-cover" />
       <canvas ref={canvas} width={1280} height={720} className="absolute inset-0 h-full w-full -scale-x-100" />
