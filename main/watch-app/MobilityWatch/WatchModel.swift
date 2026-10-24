@@ -30,6 +30,21 @@ final class WatchModel: NSObject, ObservableObject {
     @Published var pendingPrompt: Prompt?
     @Published var lastSummary: String?
 
+    // Progress + reminder settings (saved on the watch)
+    @Published var streak = 0
+    @Published var todayReps = 0
+    @Published var remindersOn = false
+    @Published var remindEvery = 2
+    private let defaults = UserDefaults.standard
+
+    override init() {
+        super.init()
+        remindersOn = defaults.bool(forKey: "remindersOn")
+        let every = defaults.integer(forKey: "remindEvery")
+        remindEvery = every == 0 ? 2 : every
+        loadStats()
+    }
+
     let arm = ArmTracker()
     var isRecording: Bool { stage == .calibrate || stage == .live }
 
@@ -79,12 +94,54 @@ final class WatchModel: NSObject, ObservableObject {
     }
 
     private func notify(_ p: Prompt) {
+        let kind = ExerciseKind.from(p.title + " " + p.message)
         let c = UNMutableNotificationContent()
         c.title = p.title
+        c.subtitle = "\(kind.title) · \(targetReps) reps"
         c.body = p.message
         c.sound = .default
-        c.categoryIdentifier = "EXERCISE"
+        c.categoryIdentifier = Reminders.promptCategory
+        c.threadIdentifier = "mobility"
+        c.userInfo = ["kind": kind.rawValue]
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: p.id, content: c, trigger: nil))
+    }
+
+    // MARK: - Reminders + stats
+    func setReminders(on: Bool? = nil, every: Int? = nil) {
+        if let on { remindersOn = on; defaults.set(on, forKey: "remindersOn") }
+        if let every { remindEvery = every; defaults.set(every, forKey: "remindEvery") }
+        if remindersOn { Reminders.schedule(everyHours: remindEvery) } else { Reminders.cancel() }
+    }
+
+    static func dayKey(_ d: Date = Date()) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: d)
+    }
+
+    func loadStats() {
+        let today = Self.dayKey()
+        let yesterday = Self.dayKey(Calendar.current.date(byAdding: .day, value: -1, to: Date())!)
+        todayReps = defaults.string(forKey: "repsDay") == today ? defaults.integer(forKey: "repsToday") : 0
+        let last = defaults.string(forKey: "lastActiveDay")
+        streak = (last == today || last == yesterday) ? defaults.integer(forKey: "streak") : 0
+    }
+
+    private func recordCompletion(reps: Int) {
+        guard reps > 0 else { return }
+        let today = Self.dayKey()
+        let yesterday = Self.dayKey(Calendar.current.date(byAdding: .day, value: -1, to: Date())!)
+        if defaults.string(forKey: "repsDay") != today { defaults.set(0, forKey: "repsToday") }
+        defaults.set(today, forKey: "repsDay")
+        defaults.set(defaults.integer(forKey: "repsToday") + reps, forKey: "repsToday")
+        let last = defaults.string(forKey: "lastActiveDay")
+        if last == yesterday {
+            defaults.set(defaults.integer(forKey: "streak") + 1, forKey: "streak")
+        } else if last != today {
+            defaults.set(1, forKey: "streak")
+        }
+        defaults.set(today, forKey: "lastActiveDay")
+        loadStats()
     }
 
     // MARK: - Flow: home → demo → calibrate → live → done
@@ -97,6 +154,7 @@ final class WatchModel: NSObject, ObservableObject {
 
     /// Show the example rep for the chosen exercise.
     func prepare(_ kind: ExerciseKind) {
+        guard !isRecording else { return }
         self.kind = kind
         pendingPrompt = nil
         stage = .demo
@@ -145,6 +203,7 @@ final class WatchModel: NSObject, ObservableObject {
             Task { @MainActor in self.builder?.finishWorkout { _, _ in } }
         }
         lastSummary = "\(kind.title): \(arm.reps)/\(targetReps) reps · best \(Int(arm.bestPeak))° · \(elapsedText)"
+        recordCompletion(reps: arm.reps)
         Task { _ = try? await post("session/stop", ["by": "watch"]) }
         sessionId = nil
         stage = .done

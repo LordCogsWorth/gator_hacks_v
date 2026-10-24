@@ -33,6 +33,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kyleprice.MobilityWatch
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 8GQ28U3477
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "4"

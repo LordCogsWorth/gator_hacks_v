@@ -1,0 +1,318 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2A0771BBAE9CBE30BE879400 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CCBA2C7656EBD6CD2708522 /* Theme.swift */; };
+		851424B1C09C5B2F8649258A /* FigureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758489EDF90197C204A8CE5A /* FigureView.swift */; };
+		8E40AABDB646558F9B376B96 /* ArmTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4D8F9683E4605B3EA98257 /* ArmTracker.swift */; };
+		98A8A8E53A7087E75E9129F1 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216CDF444ED32C11EF45B814 /* ContentView.swift */; };
+		EEECF6730CCE8BB94EAE1D84 /* MobilityWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B892AC14A5326A8228B978 /* MobilityWatchApp.swift */; };
+		F6809577995B92D8B369849B /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = F84083CA161D0D3B1C9B8201 /* Reminders.swift */; };
+		F69600DBFD526AF1C26B0941 /* Exercise.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C78F5115C1B1E5CF0AF652 /* Exercise.swift */; };
+		FB56C6F077F26EA556F4B277 /* WatchModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03FAA6FC6BC641C7990FAEF /* WatchModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		04C78F5115C1B1E5CF0AF652 /* Exercise.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exercise.swift; sourceTree = "<group>"; };
+		216CDF444ED32C11EF45B814 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		24192B26C737D775846A9BB4 /* MobilityWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MobilityWatch.entitlements; sourceTree = "<group>"; };
+		34CA2A658DEE92A9FE10BF75 /* MobilityWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MobilityWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6D4D8F9683E4605B3EA98257 /* ArmTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArmTracker.swift; sourceTree = "<group>"; };
+		758489EDF90197C204A8CE5A /* FigureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FigureView.swift; sourceTree = "<group>"; };
+		8CCBA2C7656EBD6CD2708522 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		CDB3C037A4B1B134D6F0AEEB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E03FAA6FC6BC641C7990FAEF /* WatchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchModel.swift; sourceTree = "<group>"; };
+		E1B892AC14A5326A8228B978 /* MobilityWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilityWatchApp.swift; sourceTree = "<group>"; };
+		F84083CA161D0D3B1C9B8201 /* Reminders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reminders.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		3BB63FAD151F7DD4E7D9D440 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				34CA2A658DEE92A9FE10BF75 /* MobilityWatch.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6189630341A2DBA5FA6C804F /* MobilityWatch */ = {
+			isa = PBXGroup;
+			children = (
+				6D4D8F9683E4605B3EA98257 /* ArmTracker.swift */,
+				216CDF444ED32C11EF45B814 /* ContentView.swift */,
+				04C78F5115C1B1E5CF0AF652 /* Exercise.swift */,
+				758489EDF90197C204A8CE5A /* FigureView.swift */,
+				CDB3C037A4B1B134D6F0AEEB /* Info.plist */,
+				24192B26C737D775846A9BB4 /* MobilityWatch.entitlements */,
+				E1B892AC14A5326A8228B978 /* MobilityWatchApp.swift */,
+				F84083CA161D0D3B1C9B8201 /* Reminders.swift */,
+				8CCBA2C7656EBD6CD2708522 /* Theme.swift */,
+				E03FAA6FC6BC641C7990FAEF /* WatchModel.swift */,
+			);
+			path = MobilityWatch;
+			sourceTree = "<group>";
+		};
+		C559CCE8B2143AA25B8123ED = {
+			isa = PBXGroup;
+			children = (
+				6189630341A2DBA5FA6C804F /* MobilityWatch */,
+				3BB63FAD151F7DD4E7D9D440 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1210B92768A35D55D1795530 /* MobilityWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8FBEB15FF681AF2F28BD4DDC /* Build configuration list for PBXNativeTarget "MobilityWatch" */;
+			buildPhases = (
+				8D301F72032941F886EA9E61 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MobilityWatch;
+			packageProductDependencies = (
+			);
+			productName = MobilityWatch;
+			productReference = 34CA2A658DEE92A9FE10BF75 /* MobilityWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		2D574BB59D58560295530CC6 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					1210B92768A35D55D1795530 = {
+						DevelopmentTeam = 8GQ28U3477;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 63B2847668057464DC448E53 /* Build configuration list for PBXProject "MobilityWatch" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = C559CCE8B2143AA25B8123ED;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 3BB63FAD151F7DD4E7D9D440 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1210B92768A35D55D1795530 /* MobilityWatch */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8D301F72032941F886EA9E61 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8E40AABDB646558F9B376B96 /* ArmTracker.swift in Sources */,
+				98A8A8E53A7087E75E9129F1 /* ContentView.swift in Sources */,
+				F69600DBFD526AF1C26B0941 /* Exercise.swift in Sources */,
+				851424B1C09C5B2F8649258A /* FigureView.swift in Sources */,
+				EEECF6730CCE8BB94EAE1D84 /* MobilityWatchApp.swift in Sources */,
+				F6809577995B92D8B369849B /* Reminders.swift in Sources */,
+				2A0771BBAE9CBE30BE879400 /* Theme.swift in Sources */,
+				FB56C6F077F26EA556F4B277 /* WatchModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		72CEA2B191D8482E293C4E85 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		815FE230AE4249472A3D8E6A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MobilityWatch/MobilityWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8GQ28U3477;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MobilityWatch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kyleprice.MobilityWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Release;
+		};
+		C0CB906262AC7E2679CC4179 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MobilityWatch/MobilityWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8GQ28U3477;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MobilityWatch/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kyleprice.MobilityWatch;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+			};
+			name = Debug;
+		};
+		F05E5AC8C436D1A393FB4D13 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		63B2847668057464DC448E53 /* Build configuration list for PBXProject "MobilityWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				72CEA2B191D8482E293C4E85 /* Debug */,
+				F05E5AC8C436D1A393FB4D13 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8FBEB15FF681AF2F28BD4DDC /* Build configuration list for PBXNativeTarget "MobilityWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0CB906262AC7E2679CC4179 /* Debug */,
+				815FE230AE4249472A3D8E6A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 2D574BB59D58560295530CC6 /* Project object */;
+}

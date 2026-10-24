@@ -21,6 +21,20 @@ enum ExerciseKind: String, CaseIterable, Identifiable {
         }
     }
 
+    var muscles: String {
+        switch self {
+        case .sideRaise: return "Deltoid · Supraspinatus"
+        case .forwardReach: return "Front deltoid · Chest"
+        }
+    }
+
+    var steps: [String] {
+        switch self {
+        case .sideRaise: return ["Thumb up", "Lift out to the side", "Stop at shoulder height", "Lower slowly"]
+        case .forwardReach: return ["Thumb up", "Reach straight ahead", "Stop at shoulder height", "Lower slowly"]
+        }
+    }
+
     var cue: String {
         switch self {
         case .sideRaise:
