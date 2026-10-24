@@ -4,11 +4,35 @@
 
 RehabTrack helps stroke patients recover arm function at home: camera sessions, Apple Watch data, and a care-team dashboard. Raghav owns the shared HTTP API (JSON-file store), the clinician UI, and the web app's shared files; the patient app (Lucas's) lives in the same web app. The pitch loop: patient data → rules engine drafts a suggestion → doctor approves/edits → patient gets the new plan. Suggest only; clinicians approve every plan change. Never say "diagnosis" in the UI.
 
+## Team workflow
+
+- Work arrives as coordinated prompts from the team coordinator (a claude.ai chat). A coordinated prompt is the final decision for its task: don't expand scope; if it conflicts with the code or this file, stop and report.
+- Git: `git pull --rebase origin main` before starting and again before pushing. Push at the end only when the prompt asks for it (coordinated prompts do); otherwise never push.
+- Ownership: Lucas's agents edit only `Raghav/web/src/patient/**`. Shared files (`src/api.ts`, `src/types.ts`, `src/camera/**`, `App.tsx`, `Brand.tsx`, `usePolling.ts`, `tailwind.config.js`, `package.json`, `package-lock.json`, `index.html`) and all docs including this file belong to Raghav. Lucas's agents list needed shared-file changes in their report instead of making them.
+- Lucas never commits `package.json` or `package-lock.json` (his npm 10.9 rewrites the lockfile). Before committing he runs `git checkout -- Raghav/web/package-lock.json Raghav/api/package-lock.json`. If a pull changes `Raghav/web/package.json`, he runs `npm install` in `Raghav/web` first.
+- Lucas's agents do NOT edit AGENTS.md; they put state changes in their report, and Raghav's next task updates "Current state".
+- Every task ends with this report template (copy it verbatim):
+
+```text
+## Report
+- Agent + task:
+- Commits: (hash: message)
+- Files changed: (path: one line what/why)
+- Verification: (each command or browser check → result)
+- Deviations from the prompt: (or "none")
+- Doc/code mismatches found: (or "none")
+- Teammate impact: Lucas / Raghav / Kyle+Justin / Stuti (or "none")
+- Raghav/Lucas must do manually: (or "none")
+- Shared-file changes needed (Lucas only): (or "none")
+- Not done / known issues:
+- Suggested next step:
+```
+
 ## Repo rules
 
 - One folder per teammate, everyone commits to main, no branches.
 - Agents work ONLY inside Raghav/. Never edit Kyle/, main/, stuti/, justin/ or anything outside Raghav/ (may read them). Lucas has no separate folder any more: his patient app is `Raghav/web/src/patient/**` (the old `leonardo/` folder was deleted; it stays in git history).
-- Teammates: Lucas = patient app (`web/src/patient/**`, calls this API); Kyle + Justin = iPhone/Apple Watch (Kyle's server main/server, port 8080); Stuti = camera/CV (MediaPipe, implements the `CameraTracker` contract).
+- Teammates: Lucas = patient app (`web/src/patient/**`, calls this API); Kyle + Justin = iPhone/Apple Watch (Kyle's server main/server, port 8080); Stuti = camera/CV. Her `stuti/` folder (commit bee196f) is a standalone ArmSense app (Express on port 8080, MediaPipe, watch ingest, Gemma proxy) that does not implement `CameraTracker`; its `REPLAY_JOINTS` and replay JSON differ from ours. The `CameraTracker` integration is done in `Raghav/web/src/camera/` by Raghav.
 - Ownership inside `web/`: Lucas owns Raghav/web/src/patient/**; Raghav owns the API, the care area, and the shared files src/api.ts, src/types.ts, src/camera/**, App.tsx, tailwind.config.js (also src/Brand.tsx and src/usePolling.ts). If patient work needs a shared-file change, ask Raghav.
 - Small commits with clear messages. Never push unless asked.
 - API changes must be additive/backward-compatible, and Raghav/api/API.md + Raghav/docs/CONTRACTS.md must be updated in the same commit.
@@ -100,4 +124,4 @@ Demo ids: `p-maria` (improving → phase-up), `p-james` (plateau + adherence), `
 
 ## Updating this file
 
-Every task must end by updating **Current state** (Done / Not done / Known issues) to match the code.
+Raghav's tasks end by updating **Current state** (Done / Not done / Known issues) to match the code, including the state changes listed in Lucas's latest reports. Lucas's agents don't edit this file; they report state changes in the "Report" (see Team workflow).
