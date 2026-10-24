@@ -135,6 +135,8 @@ The patient app doesn't send average heart rate. Sessions have an `avgHr` field,
 
 The API validates the whole body before saving anything and answers `400 { error, details: [{ field, message }] }` listing every problem (rules in `Raghav/api/API.md`). Every `ExerciseResult` number is required and must be finite; `compRepPct` is 0–100; `pain` 0–10 and `tiredness` 1–5 are optional; 1–6 results per session.
 
+**Safety stop:** if the patient stops for pain or dizziness, the app still uploads the session with `"stopReason": "pain" | "dizziness" | "other"` and the results finished so far (0–6; `[]` is allowed only with a `stopReason`). The API stores `stopReason` on the session and raises a `safety-stop` alert for the care team.
+
 Replays are uploaded separately (**implemented**): after the session is saved, `POST /api/sessions/:id/replay` once per exercise + side with the `ReplayFile` the app built for that round (§4). The API checks `fps` = 15, the 13 joints in the order above, 1–1800 frames (≤ 120 s) of `[x, y, z]` number triples, and valid `warnings`; it stores each one under the key `<sessionId>-<exercise>-<side>` and lists the keys on `session.replays`. Read them back with `GET /api/sessions/:id/replays` (summaries) and `GET /api/sessions/:id/replays/:exercise/:side` (full file). Sessions still carry a legacy `replayFile` field that is always `null`; use `replays`. Details: `Raghav/api/API.md`.
 
 ## 5b. Plan (Raghav's API → Lucas's patient app)

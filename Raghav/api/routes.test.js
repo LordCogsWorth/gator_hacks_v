@@ -128,6 +128,46 @@ describe('POST /sessions', () => {
   });
 });
 
+describe('POST /sessions safety stop (stopReason)', () => {
+  it('accepts results: [] with a stopReason, stores it, and raises a safety-stop alert', async () => {
+    const res = await post('/sessions', goodSession({ pain: 8, results: [], stopReason: 'pain' }));
+    assert.equal(res.status, 201);
+    const body = await res.json();
+    assert.equal(body.session.stopReason, 'pain');
+    assert.equal(body.results.length, 0);
+    assert.ok(body.alertsCreated.some((a) => a.type === 'safety-stop'));
+
+    const sessions = await (await fetch(`${base}/patients/p-test/sessions`)).json();
+    assert.equal(sessions[0].stopReason, 'pain');
+    assert.equal(sessions[0].symmetry, null);
+  });
+
+  it('accepts partial results with a stopReason', async () => {
+    const res = await post('/sessions', goodSession({ stopReason: 'dizziness' }));
+    assert.equal(res.status, 201);
+    assert.equal((await res.json()).results.length, 2);
+  });
+
+  it('rejects an unknown stopReason and still rejects results: [] without one', async () => {
+    let res = await post('/sessions', goodSession({ results: [], stopReason: 'bored' }));
+    assert.equal(res.status, 400);
+    const fields = (await res.json()).details.map((d) => d.field);
+    assert.ok(fields.includes('stopReason'));
+    res = await post('/sessions', goodSession({ results: [], stopReason: null }));
+    assert.equal(res.status, 400);
+    assert.equal(store.readAll('sessions').length, 0);
+  });
+
+  it('returns stopReason null for normal sessions and keeps the list symmetry from the last scored session', async () => {
+    await post('/sessions', goodSession({ startedAt: '2026-10-23T15:00:00.000Z', endedAt: '2026-10-23T15:10:00.000Z' }));
+    await post('/sessions', goodSession({ results: [], stopReason: 'other' }));
+    const sessions = await (await fetch(`${base}/patients/p-test/sessions`)).json();
+    assert.equal(sessions[0].stopReason, null);
+    const list = await (await fetch(`${base}/patients`)).json();
+    assert.equal(list[0].latestSymmetry, 63); // 100 / 160, from the session before the stop
+  });
+});
+
 describe('POST /watch/daily', () => {
   it('merges into an existing day without nulling fields that were not sent', async () => {
     let res = await post('/watch/daily', { patientId: 'p-test', date: '2026-10-24', steps: 4200, restingHr: 68 });

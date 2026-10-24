@@ -306,6 +306,68 @@ describe('evaluatePatient', () => {
   });
 });
 
+describe('evaluatePatient safety stop', () => {
+  const NOW = new Date('2026-10-24T12:00:00.000Z');
+  const HOUR = 60 * 60 * 1000;
+
+  function addStoppedSession(startedAt, stopReason = 'pain', pain = 8) {
+    store.append('sessions', {
+      id: store.makeId('sess'), patientId: 'p-test', startedAt, endedAt: startedAt, pain, tiredness: 2,
+      stopReason, avgHr: null, replayFile: null, replays: [],
+    });
+  }
+
+  const openSafetyStops = () => store.readAll('alerts').filter((a) => a.type === 'safety-stop' && !a.acknowledged);
+
+  beforeEach(() => {
+    for (const name of ['sessions', 'exerciseResults', 'watchDaily', 'alerts', 'plans']) {
+      store.writeAll(name, []);
+    }
+    store.writeAll('patients', [
+      { id: 'p-test', name: 'Test', weakSide: 'left', phase: 1, nextCheckin: '2026-10-30', bpLimitSys: 140 },
+    ]);
+  });
+
+  it('raises a safety-stop alert (and the pain alert) for a session stopped with no results', () => {
+    addStoppedSession('2026-10-24T09:00:00.000Z');
+    const { alertsCreated } = evaluatePatient('p-test', { now: NOW });
+    const types = alertsCreated.map((a) => a.type);
+    assert.ok(types.includes('safety-stop'));
+    assert.ok(types.includes('pain'));
+    const alert = alertsCreated.find((a) => a.type === 'safety-stop');
+    assert.match(alert.detail, /because of pain/);
+    assert.match(alert.detail, /No exercises were recorded/);
+  });
+
+  it('dedupes while open and respects the acknowledgement cooldown', () => {
+    addStoppedSession('2026-10-24T09:00:00.000Z', 'dizziness', 3);
+    assert.equal(evaluatePatient('p-test', { now: NOW }).alertsCreated.filter((a) => a.type === 'safety-stop').length, 1);
+    assert.equal(evaluatePatient('p-test', { now: NOW }).alertsCreated.length, 0);
+
+    const ackAt = new Date(NOW.getTime() - HOUR).toISOString();
+    store.writeAll('alerts', store.readAll('alerts').map((a) => ({ ...a, acknowledged: true, acknowledgedAt: ackAt })));
+    assert.equal(evaluatePatient('p-test', { now: NOW }).alertsCreated.length, 0);
+
+    // A newer stopped session after the acknowledgement raises it again.
+    addStoppedSession(new Date(NOW.getTime() - 10 * 60 * 1000).toISOString(), 'dizziness', 3);
+    assert.ok(evaluatePatient('p-test', { now: NOW }).alertsCreated.some((a) => a.type === 'safety-stop'));
+    assert.equal(openSafetyStops().length, 1);
+  });
+
+  it('only looks at the latest session', () => {
+    addStoppedSession('2026-10-23T09:00:00.000Z', 'other', null);
+    store.append('sessions', {
+      id: 'sess-ok', patientId: 'p-test', startedAt: '2026-10-24T09:00:00.000Z', endedAt: '2026-10-24T09:10:00.000Z',
+      pain: 2, tiredness: 2, stopReason: null, avgHr: null, replayFile: null, replays: [],
+    });
+    store.writeAll('exerciseResults', [
+      { ...result('arm_raise', 'healthy', 160), sessionId: 'sess-ok' },
+      { ...result('arm_raise', 'weak', 100), sessionId: 'sess-ok' },
+    ]);
+    assert.equal(evaluatePatient('p-test', { now: NOW }).alertsCreated.filter((a) => a.type === 'safety-stop').length, 0);
+  });
+});
+
 describe('suggestPlanChange', () => {
   const NOW = new Date('2026-10-24T12:00:00.000Z');
   const plan = {

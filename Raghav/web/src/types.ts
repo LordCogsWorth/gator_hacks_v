@@ -60,6 +60,9 @@ export const REPLAY_JOINTS = [
   'right_ankle', // 28
 ] as const;
 
+/** Why a session was ended early (POST /sessions stopReason). */
+export type StopReason = 'pain' | 'dizziness' | 'other';
+
 export type PlanStatus = 'suggested' | 'approved' | 'superseded' | 'dismissed';
 export type PlanKind = 'phase-up' | 'plateau' | 'compensation';
 export type Trend = 'up' | 'down' | 'flat' | 'none';
@@ -70,6 +73,7 @@ export type AlertType =
   | 'compensation'
   | 'adherence'
   | 'pain'
+  | 'safety-stop'
   | 'heart-rate'
   | 'blood-pressure'
   | 'fall';
@@ -144,6 +148,8 @@ export interface Session {
   endedAt: string;
   pain: number | null;
   tiredness: number | null;
+  /** Set when the patient ended the session early (safety stop); results may then be empty. */
+  stopReason: StopReason | null;
   avgHr: number | null;
   /** Legacy placeholder, always null. Uploaded replays are listed in `replays`. */
   replayFile: unknown | null;
@@ -162,6 +168,8 @@ export interface SessionUploadBody {
   endedAt: string | number;
   pain?: number | null;
   tiredness?: number | null;
+  /** Safety stop: allows 0 results. */
+  stopReason?: StopReason | null;
   results: ExerciseResult[];
 }
 
@@ -251,6 +259,7 @@ export const ALERT_LABELS: Record<AlertType, string> = {
   compensation: 'Compensation',
   adherence: 'Adherence',
   pain: 'Pain',
+  'safety-stop': 'Safety stop',
   'heart-rate': 'Heart rate',
   'blood-pressure': 'Blood pressure',
   fall: 'Fall',

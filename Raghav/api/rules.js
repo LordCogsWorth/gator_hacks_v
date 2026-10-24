@@ -4,7 +4,8 @@
  * Runs after each session upload (and after seeding).
  * - Drafts a suggested plan for the care team (phase up, plateau, or
  *   compensation), with a plain-language reason. A clinician approves it.
- * - Raises alerts (plateau, setback, compensation, adherence, pain, HR, BP, fall).
+ * - Raises alerts (plateau, setback, compensation, adherence, pain, safety stop,
+ *   HR, BP, fall).
  * - Never creates a duplicate "open" alert of the same type for the same patient.
  * - Doesn't re-raise an alert the care team acknowledged in the last 72h
  *   unless newer data has arrived since (see isCoolingDown).
@@ -188,6 +189,22 @@ function restingHrSpike(watchRows, now = new Date()) {
 // ---------------------------------------------------------------------------
 // Alert helpers
 // ---------------------------------------------------------------------------
+
+const STOP_REASON_WORDS = {
+  pain: 'pain',
+  dizziness: 'dizziness or feeling unwell',
+  other: 'another reason',
+};
+
+/** Alert text for a session the patient ended early (session.stopReason set). */
+function safetyStopDetail(entry) {
+  const { stopReason, pain } = entry.session;
+  const painText = typeof pain === 'number' ? ` Reported pain ${pain}/10.` : '';
+  const done = entry.results.length;
+  const doneText =
+    done === 0 ? ' No exercises were recorded.' : ` ${done} exercise result(s) were recorded before stopping.`;
+  return `Patient stopped the latest session early because of ${STOP_REASON_WORDS[stopReason] || stopReason}.${painText}${doneText}`;
+}
 
 function hasOpenAlert(alerts, patientId, type) {
   return alerts.some((a) => a.patientId === patientId && a.type === type && !a.acknowledged);
@@ -465,6 +482,10 @@ function evaluatePatient(patientId, options = {}) {
       'adherence',
       `About ${misses} missed session day(s) in a row since the last completed session.`
     );
+  }
+
+  if (lastEntry && lastEntry.session.stopReason) {
+    addIfNew('safety-stop', safetyStopDetail(lastEntry));
   }
 
   if (lastEntry && typeof lastEntry.session.pain === 'number' && lastEntry.session.pain >= 7) {

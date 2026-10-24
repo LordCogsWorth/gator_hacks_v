@@ -192,7 +192,7 @@ A plan record (returned by the plan endpoints and inside `GET /patients/:id`):
 
 ## GET /api/patients/:id/sessions
 
-All sessions for a patient, oldest first, each with nested `results` (ExerciseResult rows) plus computed `symmetry`, `compensation`, and `symmetryByExercise`.
+All sessions for a patient, oldest first, each with nested `results` (ExerciseResult rows) plus computed `symmetry`, `compensation`, and `symmetryByExercise`. A safety-stopped session (see `stopReason` under [POST /api/sessions](#post-apisessions--lucass-patient-app-calls-this)) may have `results: []`; its `symmetry`, `compensation` and per-exercise values are then `null`.
 
 **Example:** `GET /api/patients/p-maria/sessions`
 
@@ -206,6 +206,7 @@ All sessions for a patient, oldest first, each with nested `results` (ExerciseRe
     "endedAt": "2026-10-04T15:42:00.000Z",
     "pain": 2,
     "tiredness": 2,
+    "stopReason": null,
     "avgHr": null,
     "replayFile": null,
     "replays": ["sess-…-arm_raise-healthy", "sess-…-arm_raise-weak"],
@@ -303,13 +304,23 @@ Send up to 6 results (3 exercises × 2 sides). You do **not** need to send `avgH
 | `startedAt`, `endedAt` | required; ISO-8601 string **or** epoch milliseconds (number). Stored as ISO UTC. |
 | `pain` | optional number 0–10 (omit or `null` if not asked) |
 | `tiredness` | optional number 1–5 |
-| `results` | array of 1–6 items, no duplicate `exercise` + `side` pair |
+| `stopReason` | optional: `"pain"` \| `"dizziness"` \| `"other"` (omit or `null` for a normal session). Set it when the patient ended the session early (safety stop). |
+| `results` | array of 1–6 items, no duplicate `exercise` + `side` pair. **0–6** items when `stopReason` is given (a stop before any exercise sends `[]`). |
 | `results[i].exercise` | `arm_raise` \| `forward_reach` \| `hand_open` |
 | `results[i].side` | `weak` \| `healthy` |
 | `results[i].bestValue`, `reps`, `secPerRep`, `smoothness`, `fatigue`, `trunkLeanMax`, `shoulderHikeMax` | required finite numbers |
 | `results[i].compRepPct` | required number 0–100 |
 
 Extra fields are ignored.
+
+**Safety stop.** When the patient stops for pain or dizziness (pain 7+ at check-in, or "I feel dizzy or unwell" mid-session), still upload the session with `stopReason` and whatever results were finished (possibly none):
+
+```json
+{ "patientId": "p-james", "startedAt": 1793030400000, "endedAt": 1793030460000, "pain": 8, "tiredness": 3, "stopReason": "pain", "results": [] }
+```
+
+It is stored with `stopReason`, and the rules engine raises a `safety-stop` alert for the care team (plus `pain` if pain ≥ 7), with the same dedupe and cooldown as other alerts.
+
 
 **Response `201`**
 ```json
@@ -321,6 +332,7 @@ Extra fields are ignored.
     "endedAt": "2026-10-24T15:42:00.000Z",
     "pain": 3,
     "tiredness": 2,
+    "stopReason": null,
     "avgHr": null,
     "replayFile": null,
     "replays": []
@@ -331,7 +343,7 @@ Extra fields are ignored.
 }
 ```
 
-`replays` lists the keys of replays uploaded for this session (see [POST /api/sessions/:id/replay](#post-apisessionsidreplay)); it starts empty. `replayFile` is a legacy placeholder kept for compatibility and is always `null`: use `replays` instead. Sessions saved before replays existed have no `replays` field in storage; `GET /patients/:id/sessions` returns `[]` for them.
+`stopReason` is `null` unless the session was safety-stopped. Sessions saved before `stopReason` existed have no such field in storage; `GET /patients/:id/sessions` returns `null` for them. `replays` lists the keys of replays uploaded for this session (see [POST /api/sessions/:id/replay](#post-apisessionsidreplay)); it starts empty. `replayFile` is a legacy placeholder kept for compatibility and is always `null`: use `replays` instead. Sessions saved before replays existed have no `replays` field in storage; `GET /patients/:id/sessions` returns `[]` for them.
 
 **Response `400`** — `{ error: "Invalid session", details: [...] }` (see [Errors](#errors))  
 **Response `404`** if `patientId` is unknown
@@ -536,7 +548,9 @@ All **open** (unacknowledged) alerts across patients, newest first.
 ```
 
 Alert `type` values:  
-`"plateau"` | `"setback"` | `"compensation"` | `"adherence"` | `"pain"` | `"heart-rate"` | `"blood-pressure"` | `"fall"`
+`"plateau"` | `"setback"` | `"compensation"` | `"adherence"` | `"pain"` | `"safety-stop"` | `"heart-rate"` | `"blood-pressure"` | `"fall"`
+
+`safety-stop` = the latest session has a `stopReason` (the patient ended it early for pain, dizziness, or another reason).
 
 ---
 
@@ -545,7 +559,7 @@ Alert `type` values:
 Acknowledge an alert (hides it from open lists). Sets `acknowledgedAt` (kept from the first acknowledgement).
 
 **Cooldown:** once acknowledged, the rules engine won't raise the same alert type for that patient again for **72 hours** — unless newer triggering data arrives after `acknowledgedAt`:
-- session alerts (`plateau`, `setback`, `compensation`, `adherence`, `pain`): a session whose `startedAt` is after `acknowledgedAt`;
+- session alerts (`plateau`, `setback`, `compensation`, `adherence`, `pain`, `safety-stop`): a session whose `startedAt` is after `acknowledgedAt`;
 - watch alerts (`heart-rate`, `blood-pressure`, `fall`): a watch row whose `date` (taken as midnight UTC) is after `acknowledgedAt`. Re-posting today's row doesn't count; tomorrow's does.
 
 After 72 hours the alert can be raised again from the same data.

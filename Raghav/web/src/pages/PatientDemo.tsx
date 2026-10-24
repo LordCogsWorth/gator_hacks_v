@@ -35,6 +35,7 @@ const WARNING_TEXT: Record<NonNullable<LiveFrame['warning']>, string> = {
 const ALERT_WORDS: Record<Alert['type'], string> = {
   compensation: 'You leaned or lifted your shoulder in many reps. Your care team has been told, so they can help with your form.',
   pain: 'You reported strong pain. Your care team has been told. If the pain is severe or sudden, call your doctor.',
+  'safety-stop': 'You stopped the session early. Your care team has been told.',
   setback: 'Your arm moved less than last time. Your care team has been told.',
   plateau: 'Your progress has been steady for a while. Your care team may adjust your plan.',
   adherence: 'Your care team noticed a few missed days. Every session helps.',

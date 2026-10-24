@@ -10,6 +10,8 @@
 
 const EXERCISES = ['arm_raise', 'forward_reach', 'hand_open'];
 const SIDES = ['weak', 'healthy'];
+// Why a patient ended a session early (safety stop). A stopped session may have no results.
+const STOP_REASONS = ['pain', 'dizziness', 'other'];
 
 // Numeric fields every ExerciseResult must carry (see docs/CONTRACTS.md §3).
 const RESULT_NUMBER_FIELDS = [
@@ -114,7 +116,8 @@ function checkOptionalRange(errors, field, v, min, max) {
 
 /**
  * POST /sessions body.
- * value: { patientId, startedAt, endedAt, pain, tiredness, results[] }
+ * value: { patientId, startedAt, endedAt, pain, tiredness, stopReason, results[] }
+ * results may be empty only when stopReason is given (a safety stop).
  */
 function validateSession(body) {
   const errors = [];
@@ -138,9 +141,22 @@ function validateSession(body) {
   const pain = checkOptionalRange(errors, 'pain', body.pain, 0, 10);
   const tiredness = checkOptionalRange(errors, 'tiredness', body.tiredness, 1, 5);
 
+  let stopReason = null;
+  if (body.stopReason !== undefined && body.stopReason !== null) {
+    if (STOP_REASONS.includes(body.stopReason)) {
+      stopReason = body.stopReason;
+    } else {
+      errors.push({ field: 'stopReason', message: `must be one of ${STOP_REASONS.join(', ')} when sent` });
+    }
+  }
+
   const results = [];
-  if (!Array.isArray(body.results) || body.results.length < 1 || body.results.length > 6) {
-    errors.push({ field: 'results', message: 'must be an array of 1 to 6 exercise results' });
+  const minResults = stopReason ? 0 : 1;
+  if (!Array.isArray(body.results) || body.results.length < minResults || body.results.length > 6) {
+    errors.push({
+      field: 'results',
+      message: 'must be an array of 1 to 6 exercise results (0 to 6 when stopReason is given)',
+    });
   } else {
     const seen = new Set();
     body.results.forEach((r, i) => {
@@ -178,7 +194,7 @@ function validateSession(body) {
 
   return {
     errors,
-    value: { patientId: body.patientId, startedAt, endedAt, pain, tiredness, results },
+    value: { patientId: body.patientId, startedAt, endedAt, pain, tiredness, stopReason, results },
   };
 }
 
@@ -340,6 +356,7 @@ function validateApproval(body) {
 module.exports = {
   EXERCISES,
   SIDES,
+  STOP_REASONS,
   WATCH_NUMBER_FIELDS,
   REPLAY_JOINTS,
   REPLAY_MAX_FRAMES,

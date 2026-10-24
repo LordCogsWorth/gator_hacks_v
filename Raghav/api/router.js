@@ -101,27 +101,24 @@ function resultsForSession(sessionId, allResults) {
  * trend: 'up' | 'down' | 'flat' | 'none'
  */
 function latestSymmetrySummary(patientId, sessions, results) {
+  // Symmetry per session, oldest first; a safety-stopped session may have none, so skip it.
   const mine = sessions
     .filter((s) => s.patientId === patientId)
     .slice()
-    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
+    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
+    .map((s) => avgSymmetry(resultsForSession(s.id, results)))
+    .filter((sym) => sym != null);
 
   if (mine.length === 0) {
     return { latestSymmetry: null, trend: 'none', trendDelta: 0 };
   }
 
-  const last = mine[mine.length - 1];
-  const lastSym = avgSymmetry(resultsForSession(last.id, results));
+  const lastSym = mine[mine.length - 1];
   if (mine.length === 1) {
     return { latestSymmetry: lastSym, trend: 'none', trendDelta: 0 };
   }
 
-  const prev = mine[mine.length - 2];
-  const prevSym = avgSymmetry(resultsForSession(prev.id, results));
-  if (lastSym == null || prevSym == null) {
-    return { latestSymmetry: lastSym, trend: 'none', trendDelta: 0 };
-  }
-
+  const prevSym = mine[mine.length - 2];
   const delta = lastSym - prevSym;
   let trend = 'flat';
   if (delta >= 2) trend = 'up';
@@ -231,6 +228,7 @@ router.get('/patients/:id/sessions', wrap((req, res) => {
       return {
         ...s,
         replays: s.replays || [],
+        stopReason: s.stopReason || null,
         results,
         symmetry: avgSymmetry(results),
         compensation: avgCompensation(results),
@@ -244,8 +242,8 @@ router.get('/patients/:id/sessions', wrap((req, res) => {
 }));
 
 /**
- * POST /sessions — Lucas's patient app uploads a finished session.
- * Body: { patientId, startedAt, endedAt, pain, tiredness, results: ExerciseResult[] }
+ * POST /sessions — the patient app uploads a finished (or safety-stopped) session.
+ * Body: { patientId, startedAt, endedAt, pain, tiredness, stopReason?, results: ExerciseResult[] }
  */
 router.post('/sessions', wrap((req, res) => {
   // Validate everything BEFORE writing, so a bad upload leaves no partial data.
@@ -266,6 +264,7 @@ router.post('/sessions', wrap((req, res) => {
     endedAt: value.endedAt,
     pain: value.pain,
     tiredness: value.tiredness,
+    stopReason: value.stopReason,
     avgHr: null,
     replayFile: null,
     replays: [],
