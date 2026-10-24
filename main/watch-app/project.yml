@@ -1,0 +1,38 @@
+# XcodeGen spec — run `xcodegen` in this folder to create MobilityWatch.xcodeproj
+name: MobilityWatch
+options:
+  bundleIdPrefix: com.kyleprice
+  deploymentTarget:
+    watchOS: "10.0"
+targets:
+  MobilityWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - MobilityWatch
+    entitlements:
+      path: MobilityWatch/MobilityWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+    info:
+      path: MobilityWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Mobility Lab
+        WKApplication: true
+        WKWatchOnly: true
+        UIBackgroundModes: [workout-processing]
+        NSHealthShareUsageDescription: Reads heart rate during exercise sessions.
+        NSHealthUpdateUsageDescription: Saves exercise sessions as workouts.
+        NSMotionUsageDescription: Tracks your arm angle and direction during exercises.
+        NSLocalNetworkUsageDescription: Sends your live movement to the Mobility Lab dashboard on your Mac.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kyleprice.MobilityWatch
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "4"

@@ -84,6 +84,14 @@
       .wbtn.green { background:#16a34a; color:#fff; }
       .wbtn.red { background:#dc2626; }
       .wbtn.gray { background:#374151; }
+      .wsFig { width:100%; height:96px; display:block; }
+      .wStep { width:30px; height:30px; border-radius:50%; border:none; background:#374151; color:#fff; font-size:18px; padding:0; }
+      .wBar { height:6px; border-radius:3px; background:#1f2937; overflow:hidden; }
+      .wBar > div { height:100%; width:0; background:#22c55e; transition:width .1s; }
+      .wSel { background:#0b1220; color:#e5e7eb; border:1px solid #334155; border-radius:6px; padding:3px 4px; font-size:12px; }
+      .screen.buzz-good { box-shadow: inset 0 0 0 3px #22c55e; }
+      .screen.buzz-bad { box-shadow: inset 0 0 0 3px #f97316; }
+      .screen.buzz-up { box-shadow: inset 0 0 0 3px #38bdf8; }
     </style>
   </head>
   <body>
@@ -233,42 +241,103 @@
             <div class="crown"></div>
             <div class="watchCase">
               <div id="watchScreen" class="screen">
-                <!-- idle -->
-                <div class="ws" data-screen="idle">
-                  <div class="wsTime" id="wsClock">10:09</div>
+                <!-- home: pick an exercise -->
+                <div class="ws" data-screen="home">
+                  <div class="wsTime" id="wsClock" style="font-size:22px;margin-top:0">10:09</div>
                   <div class="wsApp">Mobility Lab</div>
-                  <div class="wsSub" id="wsIdleSub">Waiting for an exercise prompt…</div>
-                  <button class="wbtn green" data-act="start">Start session</button>
+                  <button class="wbtn gray" data-act="pick" data-kind="side_raise" style="text-align:left">↔ Arm raise to side</button>
+                  <button class="wbtn gray" data-act="pick" data-kind="forward_reach" style="text-align:left">→ Forward reach</button>
+                  <div class="wsMetric" style="align-items:center;margin-top:4px">
+                    <button class="wStep" data-act="repsDown">−</button>
+                    <span><b id="wsRepsSel">10</b> reps</span>
+                    <button class="wStep" data-act="repsUp">+</button>
+                  </div>
                 </div>
                 <!-- notification -->
                 <div class="ws" data-screen="notify">
                   <div class="wsNotifHead"><span class="appIcon">💪</span><span>MOBILITY LAB</span><span class="wsNow">now</span></div>
                   <div class="wsTitle" id="wsNTitle">Time for your exercise</div>
                   <div class="wsBody" id="wsNBody"></div>
-                  <button class="wbtn green" data-act="start">Start session</button>
-                  <button class="wbtn gray" data-act="dismiss">Dismiss</button>
+                  <button class="wbtn green" data-act="fromPrompt">Start session</button>
+                  <button class="wbtn gray" data-act="home">Later</button>
                 </div>
-                <!-- recording -->
-                <div class="ws" data-screen="recording">
-                  <div class="wsRec"><span class="dot"></span> REC <span id="wsTimer" class="mono">0:00</span></div>
-                  <div class="wsExercise" id="wsExercise">Mobility session</div>
-                  <div class="wsBig"><span id="wsHR">--</span><small> ♥ BPM</small></div>
-                  <div class="wsMetric">Motion <span id="wsMotion" class="mono">0.00 g</span></div>
-                  <div class="wsMetric">Samples <span id="wsSamples" class="mono">0</span></div>
-                  <button class="wbtn red" data-act="stop">Stop</button>
+                <!-- demo: example rep -->
+                <div class="ws" data-screen="demo">
+                  <div class="wsTitle" id="wsDemoTitle" style="text-align:center">Arm raise to side</div>
+                  <div class="wsSub" id="wsDemoSub" style="margin:0">10 reps · left arm</div>
+                  <canvas id="wsDemoFig" class="wsFig"></canvas>
+                  <div class="wsBody" id="wsDemoCue" style="text-align:center;font-size:10.5px"></div>
+                  <button class="wbtn green" data-act="begin">▶ Begin session</button>
+                  <button class="wbtn gray" data-act="home">Back</button>
+                </div>
+                <!-- calibrate -->
+                <div class="ws" data-screen="calibrate">
+                  <div class="wsRec"><span class="dot"></span> REC <span class="mono wsTimer">0:00</span></div>
+                  <div class="wsTitle" style="text-align:center">Calibrate</div>
+                  <canvas id="wsCalFig" class="wsFig"></canvas>
+                  <div class="wsBody" style="text-align:center">Hold your arm straight out <b>in front</b></div>
+                  <div class="wBar"><div id="wsCalBar"></div></div>
+                  <div class="wsSub" id="wsCalAngle" style="margin:0">Arm angle 0°</div>
+                  <button class="wbtn red" data-act="stop">Cancel</button>
+                </div>
+                <!-- live tracking -->
+                <div class="ws" data-screen="live">
+                  <div class="wsMetric" style="align-items:baseline">
+                    <b id="wsReps" style="font-size:22px;color:#fff">0/10</b>
+                    <span style="text-align:right;font-size:10px;line-height:1.2"><span class="mono wsTimer">0:00</span><br /><span id="wsHR2" style="color:#f472b6">♥ --</span></span>
+                  </div>
+                  <canvas id="wsLiveFig" class="wsFig"></canvas>
+                  <div class="wsMetric"><b id="wsElev" class="mono">0°</b><span id="wsDir" style="color:#9ca3af">—</span></div>
+                  <div class="wsBody" id="wsHint" style="text-align:center;min-height:28px;font-size:10.5px"></div>
+                  <button class="wbtn red" data-act="stop">■ Stop</button>
                 </div>
                 <!-- summary -->
-                <div class="ws" data-screen="summary">
-                  <div class="wsTitle">Session saved ✓</div>
+                <div class="ws" data-screen="done">
+                  <div style="text-align:center;font-size:30px" id="wsDoneIcon">✅</div>
+                  <div class="wsTitle" style="text-align:center" id="wsDoneTitle">Great work!</div>
+                  <div class="wsSub" id="wsDoneEx" style="margin:0">Arm raise to side</div>
+                  <div class="wsMetric">Reps <span id="wsSumReps" class="mono">0/10</span></div>
+                  <div class="wsMetric">Best height <span id="wsSumBest" class="mono">--</span></div>
                   <div class="wsMetric">Time <span id="wsSumTime" class="mono">0:00</span></div>
-                  <div class="wsMetric">Avg HR <span id="wsSumHR" class="mono">--</span></div>
-                  <div class="wsMetric">Peak motion <span id="wsSumPeak" class="mono">--</span></div>
-                  <div class="wsMetric">Samples <span id="wsSumN" class="mono">0</span></div>
-                  <button class="wbtn gray" data-act="done">Done</button>
+                  <button class="wbtn green" data-act="home">Done</button>
                 </div>
               </div>
             </div>
           </div>
+
+          <div class="row" style="margin-top:12px;gap:6px">
+            <label class="sub">Arm data
+              <select id="wsSource" class="wSel">
+                <option value="auto">Real watch (camera backup)</option>
+                <option value="watch">Real watch only</option>
+                <option value="camera">Camera only</option>
+                <option value="demo">Demo (scripted, not real)</option>
+              </select>
+            </label>
+            <label class="sub">Watch on
+              <select id="wsWrist" class="wSel">
+                <option value="L">Left wrist</option>
+                <option value="R">Right wrist</option>
+              </select>
+            </label>
+          </div>
+          <div class="sub mono" id="wsSrcNow" style="margin-top:4px">source: —</div>
+
+          <div class="label" style="margin-top:12px">Arm orientation</div>
+          <div class="row" style="gap:6px;margin-top:6px">
+            <div style="flex:1;text-align:center">
+              <canvas id="oriElev" width="240" height="150" style="width:120px;height:75px"></canvas>
+              <div class="sub">Height <b id="oriElevTxt" class="mono" style="color:#e5e7eb">0°</b></div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <canvas id="oriDir" width="240" height="150" style="width:120px;height:75px"></canvas>
+              <div class="sub">Direction <b id="oriDirTxt" class="mono" style="color:#e5e7eb">—</b></div>
+            </div>
+          </div>
+          <div class="sub" style="margin-top:8px">Recorded movement (height over time)</div>
+          <canvas id="oriTrace" width="520" height="160" style="width:100%;height:80px;background:#0b1220;border-radius:8px"></canvas>
+          <div class="sub mono" id="oriRec" style="margin-top:4px">not recording</div>
+
           <p class="sub" style="margin-top:10px">
             This preview mirrors the real watch app (<code>Kyle/watch-app</code>). Taps here and on the watch both go to the
             same server, so starting on either one starts the session everywhere.

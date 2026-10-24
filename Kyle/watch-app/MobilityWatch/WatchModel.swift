@@ -2,6 +2,7 @@ import Foundation
 import CoreMotion
 import HealthKit
 import UserNotifications
+import WatchKit
 
 // ⚠️ Set this to the "Watch app server URL" printed when the Node server starts
 // (your Mac's Wi-Fi address). The watch and Mac must be on the same network.
@@ -12,19 +13,25 @@ struct Prompt: Decodable { let seq: Int; let id: String; let title: String; let 
 private struct PromptsResponse: Decodable { let latestSeq: Int; let prompts: [Prompt] }
 private struct SessionStartResponse: Decodable { struct Active: Decodable { let id: String }; let active: Active }
 
+/// Screens of the watch app.
+enum Stage { case home, demo, calibrate, live, done }
+
 @MainActor
 final class WatchModel: NSObject, ObservableObject {
     static let shared = WatchModel()
 
-    @Published var isRecording = false
-    @Published var exercise = ""
+    @Published var stage: Stage = .home
+    @Published var kind: ExerciseKind = .sideRaise
+    @Published var targetReps = 10
     @Published var heartRate: Double?
-    @Published var motionLevel: Double = 0
     @Published var samplesSent = 0
     @Published var elapsedText = "0:00"
     @Published var serverOK = false
     @Published var pendingPrompt: Prompt?
     @Published var lastSummary: String?
+
+    let arm = ArmTracker()
+    var isRecording: Bool { stage == .calibrate || stage == .live }
 
     private let motion = CMMotionManager()
     private let health = HKHealthStore()
@@ -41,8 +48,7 @@ final class WatchModel: NSObject, ObservableObject {
     // MARK: - Permissions
     func requestHealthAccess() {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        let hr = HKQuantityType(.heartRate)
-        health.requestAuthorization(toShare: [HKObjectType.workoutType()], read: [hr]) { _, _ in }
+        health.requestAuthorization(toShare: [HKObjectType.workoutType()], read: [HKQuantityType(.heartRate)]) { _, _ in }
     }
 
     // MARK: - Prompt polling (dashboard → watch notification)
@@ -61,8 +67,7 @@ final class WatchModel: NSObject, ObservableObject {
             let (data, _) = try await URLSession.shared.data(from: comps.url!)
             let r = try JSONDecoder().decode(PromptsResponse.self, from: data)
             serverOK = true
-            // First poll: don't replay old prompts, just remember where we are.
-            if lastSeq == nil { lastSeq = r.latestSeq; return }
+            if lastSeq == nil { lastSeq = r.latestSeq; return } // don't replay old prompts
             lastSeq = r.latestSeq
             if let p = r.prompts.last {
                 pendingPrompt = p
@@ -82,18 +87,34 @@ final class WatchModel: NSObject, ObservableObject {
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: p.id, content: c, trigger: nil))
     }
 
-    // MARK: - Session
+    // MARK: - Flow: home → demo → calibrate → live → done
+
+    /// Called from the notification's "Start session" button.
     func startSession(exercise: String) {
         guard !isRecording else { return }
-        self.exercise = exercise
-        isRecording = true
+        prepare(ExerciseKind.from(exercise + " " + (pendingPrompt?.message ?? "")))
+    }
+
+    /// Show the example rep for the chosen exercise.
+    func prepare(_ kind: ExerciseKind) {
+        self.kind = kind
+        pendingPrompt = nil
+        stage = .demo
+    }
+
+    /// "Begin session": start recording, then ask the user to calibrate "straight ahead".
+    func begin() {
+        guard !isRecording else { return }
+        arm.reset(kind: kind)
         samplesSent = 0
         startDate = Date()
-        pendingPrompt = nil
+        elapsedText = "0:00"
+        stage = .calibrate
+        WKInterfaceDevice.current().play(.start)
 
+        let title = "\(kind.title) × \(targetReps)"
         Task {
-            let body: [String: Any] = ["by": "watch", "exercise": exercise]
-            if let data = try? await post("session/start", body),
+            if let data = try? await post("session/start", ["by": "watch", "exercise": title]),
                let r = try? JSONDecoder().decode(SessionStartResponse.self, from: data) {
                 sessionId = r.active.id
             } else {
@@ -115,7 +136,6 @@ final class WatchModel: NSObject, ObservableObject {
 
     func stopSession() {
         guard isRecording else { return }
-        isRecording = false
         motion.stopDeviceMotionUpdates()
         flushTimer?.invalidate()
         clockTimer?.invalidate()
@@ -124,10 +144,16 @@ final class WatchModel: NSObject, ObservableObject {
         builder?.endCollection(withEnd: Date()) { _, _ in
             Task { @MainActor in self.builder?.finishWorkout { _, _ in } }
         }
-        lastSummary = "Last: \(exercise) · \(elapsedText) · \(samplesSent) samples"
+        lastSummary = "\(kind.title): \(arm.reps)/\(targetReps) reps · best \(Int(arm.bestPeak))° · \(elapsedText)"
         Task { _ = try? await post("session/stop", ["by": "watch"]) }
         sessionId = nil
+        stage = .done
+        WKInterfaceDevice.current().play(.stop)
     }
+
+    func goHome() { stage = .home }
+
+    // MARK: - Sensors
 
     // Workout session keeps the app running with the wrist down and gives live heart rate.
     private func startWorkout() {
@@ -151,10 +177,22 @@ final class WatchModel: NSObject, ObservableObject {
     private func startMotion() {
         guard motion.isDeviceMotionAvailable else { return }
         motion.deviceMotionUpdateInterval = 1.0 / 25.0 // 25 Hz
-        motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
+        // z-vertical frame: gives a stable "up" so arm direction can be measured relative to calibration.
+        motion.startDeviceMotionUpdates(using: .xArbitraryZVertical, to: .main) { [weak self] m, _ in
             guard let self, let m else { return }
-            Task { @MainActor in self.record(m) }
+            Task { @MainActor in self.handle(m) }
         }
+    }
+
+    private func handle(_ m: CMDeviceMotion) {
+        arm.update(m)
+        if stage == .calibrate && arm.calibrated { stage = .live }
+        if stage == .live && arm.reps >= targetReps {
+            WKInterfaceDevice.current().play(.notification)
+            stopSession()
+            return
+        }
+        record(m)
     }
 
     private static let iso: ISO8601DateFormatter = {
@@ -165,13 +203,20 @@ final class WatchModel: NSObject, ObservableObject {
 
     private func record(_ m: CMDeviceMotion) {
         let a = m.userAcceleration, g = m.rotationRate
-        motionLevel = motionLevel * 0.8 + sqrt(a.x * a.x + a.y * a.y + a.z * a.z) * 0.2
         var s: [String: Any] = [
             "timestamp": Self.iso.string(from: Date()),
             "accel": ["x": a.x, "y": a.y, "z": a.z],
             "gyro": ["x": g.x, "y": g.y, "z": g.z],
             "source": WATCH_SOURCE,
-            "sessionId": sessionId ?? "pending"
+            "sessionId": sessionId ?? "pending",
+            "arm": [
+                "exercise": kind.rawValue,
+                "elevationDeg": (arm.elevation * 10).rounded() / 10,
+                "directionDeg": (arm.plane * 10).rounded() / 10,
+                "calibrated": arm.calibrated,
+                "reps": arm.reps,
+                "targetReps": targetReps
+            ]
         ]
         if let hr = heartRate { s["heartRate"] = hr }
         buffer.append(s)

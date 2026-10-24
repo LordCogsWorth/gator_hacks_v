@@ -804,6 +804,7 @@ function loop() {
   }
   if (lm && wl) {
     processPose(lm, wl, now);
+    S.lastWl = wl;
     if (S.follow) updatePose(lm, wl);
     drawOverlay(lm);
     if (S.test.phase === 'recording') recordTestFrame(lm, wl);
@@ -1332,71 +1333,468 @@ fetch('/alert/config')
 refreshExercises();
 
 // ============================================================
-// Watch app simulator (mirrors Kyle/watch-app on the real watch)
+// Watch app simulator — mirrors Kyle/watch-app screen by screen:
+// home → demo (example rep) → calibrate → live tracking → done.
+// Arm data comes from the real watch (SSE `arm` field), the camera
+// (MediaPipe pose, watch arm only) or a scripted demo motion.
 // ============================================================
-const W = { screen: 'idle', active: null, timer: null };
+const EXK = {
+  side_raise: {
+    title: 'Arm raise to side', view: 'front', ideal: 90, ok: (p) => p >= 50,
+    cue: 'Thumb up. Raise your arm out to the side to shoulder height, then lower slowly.',
+    wrong: 'Move more out to the side', wrongRep: 'That was forward — raise out to the side'
+  },
+  forward_reach: {
+    title: 'Forward reach', view: 'side', ideal: 0, ok: (p) => p <= 40,
+    cue: 'Thumb up. Reach straight out in front to shoulder height, then lower slowly.',
+    wrong: 'Bring your arm more in front', wrongRep: 'That was sideways — reach straight ahead'
+  }
+};
+const REP_COUNT = 75, REP_TARGET = 90;
+const kindFrom = (t) => (/forward|reach|front|flexion/i.test(t) ? 'forward_reach' : 'side_raise');
 const fmtDur = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
-function wsShow(name) {
-  W.screen = name;
-  document.querySelectorAll('#watchScreen .ws').forEach((el) => el.classList.toggle('active', el.dataset.screen === name));
+const W = {
+  stage: 'home', kind: 'side_raise', target: 10, leftArm: true, source: 'auto', srcNow: '—',
+  active: null, arm: null, trace: [], buf: [], stageT: 0, watchArmAt: 0, hr: null, startedAt: 0
+};
+
+// ---------- tracker (same logic as ArmTracker.swift) ----------
+function newTracker(kind) {
+  return { kind, elev: 0, plane: EXK[kind].ideal, calibrated: false, calib: 0, calibStart: 0, ready: false,
+    reps: 0, attempts: 0, peak: 0, best: 0, up: false, reached: false, pSum: 0, pN: 0, hint: '' };
 }
 
-function wsTick() {
-  const now = new Date();
-  $('wsClock').textContent = `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
-  if (W.active) {
-    $('wsTimer').textContent = fmtDur((Date.now() - Date.parse(W.active.startedAt)) / 1000);
+function trackerUpdate(a, elev, plane, now) {
+  a.elev += (elev - a.elev) * 0.35;
+  if (plane != null) a.plane += (plane - a.plane) * 0.3;
+  const ex = EXK[a.kind];
+
+  if (!a.calibrated) {
+    if (a.elev >= 60 && a.elev <= 120 && a.plane <= 35) {
+      a.calibStart ||= now;
+      a.calib = Math.min(1, (now - a.calibStart) / 1500);
+      if (a.calib >= 1) {
+        a.calibrated = true;
+        a.hint = 'Calibrated ✓ Lower your arm to start';
+        buzz('good');
+      }
+    } else {
+      a.calibStart = 0;
+      a.calib = 0;
+    }
+    return;
+  }
+  // after calibration the arm must come down before reps count
+  if (!a.ready) {
+    if (a.elev < 25) {
+      a.ready = true;
+      a.hint = ex.cue;
+    }
+    return;
+  }
+  if (!a.up && a.elev > 35) {
+    Object.assign(a, { up: true, peak: a.elev, pSum: 0, pN: 0, reached: false, hint: '' });
+  }
+  if (!a.up) return;
+  a.peak = Math.max(a.peak, a.elev);
+  if (a.elev > 45) {
+    a.pSum += a.plane;
+    a.pN += 1;
+    if (!ex.ok(a.plane)) a.hint = ex.wrong;
+    else if (!a.reached) a.hint = 'Keep lifting…';
+  }
+  if (!a.reached && a.elev >= REP_COUNT) {
+    a.reached = true;
+    a.hint = 'Now lower slowly';
+    buzz('up');
+  }
+  if (a.elev < 25) {
+    a.up = false;
+    a.attempts += 1;
+    a.best = Math.max(a.best, a.peak);
+    const avg = a.pN ? a.pSum / a.pN : a.plane;
+    if (a.peak >= REP_COUNT && ex.ok(avg)) {
+      a.reps += 1;
+      a.hint = `Good rep! (${Math.round(a.peak)}°)`;
+      buzz('good');
+    } else if (!ex.ok(avg)) {
+      a.hint = ex.wrongRep;
+      buzz('bad');
+    } else {
+      a.hint = `Lift higher — aim for shoulder height (${Math.round(a.peak)}°)`;
+      buzz('bad');
+    }
+    a.reached = false;
   }
 }
-setInterval(wsTick, 500);
-wsTick();
 
-function wsNotify(p) {
-  if (W.active) return; // don't interrupt a recording
-  $('wsNTitle').textContent = p.title;
-  $('wsNBody').textContent = p.message;
-  wsShow('notify');
+// Haptic stand-in: flash the watch screen border.
+let buzzT = 0;
+function buzz(kind) {
+  const el = $('watchScreen');
+  el.classList.remove('buzz-good', 'buzz-bad', 'buzz-up');
+  el.classList.add(`buzz-${kind}`);
+  clearTimeout(buzzT);
+  buzzT = setTimeout(() => el.classList.remove(`buzz-${kind}`), 350);
 }
 
-function wsStarted(info) {
-  W.active = info;
-  W.samples = 0;
-  $('wsExercise').textContent = info.exercise;
-  $('wsSamples').textContent = '0';
-  wsShow('recording');
-  $('status').textContent = `Session started from the ${info.startedBy} — recording watch motion${window.__camStream ? ' and camera' : ''}.`;
-  // camera analysis runs too if the camera is already on (browsers need a click to turn it on)
-  if (window.__camStream && S.test.phase === 'idle') analyze();
+// ---------- arm sources ----------
+// Camera: body-relative angles of the watch arm from MediaPipe world landmarks (y down, -z toward camera).
+function cameraArm() {
+  const wl = S.lastWl;
+  if (!wl || !S.bodyVisible) return null;
+  const [sh, el] = W.leftArm ? [11, 13] : [12, 14];
+  const a = { x: wl[el].x - wl[sh].x, y: wl[el].y - wl[sh].y, z: wl[el].z - wl[sh].z };
+  const n = Math.hypot(a.x, a.y, a.z) || 1;
+  const elev = (Math.acos(Math.max(-1, Math.min(1, a.y / n))) * 180) / Math.PI;
+  const lx = wl[12].x - wl[11].x, lz = wl[12].z - wl[11].z;
+  const ln = Math.hypot(lx, lz) || 1;
+  const lat = { x: lx / ln, z: lz / ln };
+  let fwd = { x: -lat.z, z: lat.x };
+  if (fwd.z > 0) fwd = { x: -fwd.x, z: -fwd.z }; // forward = toward the camera
+  const hz = Math.hypot(a.x, a.z);
+  const plane = hz / n < 0.3 ? null : (Math.atan2(Math.abs(a.x * lat.x + a.z * lat.z), a.x * fwd.x + a.z * fwd.z) * 180) / Math.PI;
+  return { elev, plane };
 }
 
-function wsStopped(sum) {
-  W.active = null;
-  $('wsSumTime').textContent = fmtDur(sum.durationSec);
-  $('wsSumHR').textContent = sum.avgHeartRate ? `${sum.avgHeartRate} bpm` : '--';
-  $('wsSumPeak').textContent = `${sum.peakAccel.toFixed(2)} g`;
-  $('wsSumN').textContent = String(sum.samples);
-  wsShow('summary');
-  $('status').textContent = `Session saved: ${fmtDur(sum.durationSec)}, ${sum.samples} watch samples (stopped from the ${sum.stoppedBy}).`;
+// Demo: scripted reps, including one in the wrong direction and one too low, to show the feedback.
+function demoArm(t) {
+  if (W.stage === 'calibrate') {
+    const k = Math.min(1, t / 900);
+    return { elev: 8 + 82 * ((1 - Math.cos(Math.PI * k)) / 2), plane: 0 };
+  }
+  const cyc = 4200, n = Math.floor(t / cyc), ph = (t % cyc) / cyc;
+  let peak = 100, plane = EXK[W.kind].ideal + Math.sin(t / 700) * 6;
+  if (n % 5 === 2) plane = W.kind === 'side_raise' ? 15 : 85;
+  if (n % 5 === 4) peak = 58;
+  const lift = ph < 0.1 ? 0 : ph < 0.45 ? (ph - 0.1) / 0.35 : ph < 0.55 ? 1 : ph < 0.9 ? 1 - (ph - 0.55) / 0.35 : 0;
+  return { elev: 8 + (peak - 8) * ((1 - Math.cos(Math.PI * lift)) / 2), plane };
 }
 
-document.querySelectorAll('#watchScreen [data-act]').forEach((b) => {
-  b.addEventListener('click', async () => {
-    const act = b.dataset.act;
+const watchLive = () => performance.now() - W.watchArmAt < 2000;
+// Only real data drives the tracker. The scripted demo runs only if explicitly chosen.
+function pickSource() {
+  if (W.source === 'demo') return 'demo';
+  if (W.source === 'camera') return window.__camStream && S.bodyVisible ? 'camera' : 'none';
+  if (watchLive()) return 'watch';
+  if (W.source === 'auto' && window.__camStream && S.bodyVisible) return 'camera';
+  return 'none';
+}
+
+// ---------- figure drawing (same as FigureView.swift) ----------
+function fitCanvas(c) {
+  const r = window.devicePixelRatio || 1;
+  const w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== w * r || c.height !== h * r) {
+    c.width = w * r;
+    c.height = h * r;
+  }
+  const ctx = c.getContext('2d');
+  ctx.setTransform(r, 0, 0, r, 0, 0);
+  return [ctx, w, h];
+}
+
+function drawFigure(canvas, view, elev, plane, leftArm, color) {
+  if (!canvas.clientWidth) return;
+  const [ctx, w, h] = fitCanvas(canvas);
+  ctx.clearRect(0, 0, w, h);
+  const u = h / 10, cx = w / 2, headR = u * 0.9;
+  const headY = u * 1.2, neckY = headY + headR, hipY = u * 6, armLen = u * 3.4;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,.85)';
+  ctx.lineWidth = Math.max(2, u * 0.35);
+  const seg = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+  ctx.beginPath();
+  ctx.arc(cx, headY, headR, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const e = (elev * Math.PI) / 180, p = (plane * Math.PI) / 180;
+  const vertical = -Math.cos(e), outward = Math.sin(e) * Math.sin(p), forward = Math.sin(e) * Math.cos(p);
+  let sh, hand, tgt;
+  if (view === 'front') {
+    const side = leftArm ? 1 : -1; // facing the viewer: their left arm is on screen right
+    sh = { x: cx + side * u * 1.3, y: neckY + u * 0.5 };
+    const other = { x: cx - side * u * 1.3, y: sh.y };
+    seg(other.x, other.y, sh.x, sh.y);
+    seg(cx, neckY, cx, hipY);
+    seg(other.x, other.y, other.x - side * u * 0.3, other.y + armLen);
+    seg(cx, hipY, cx - u, h - u * 0.3);
+    seg(cx, hipY, cx + u, h - u * 0.3);
+    tgt = { x: sh.x + side * armLen, y: sh.y };
+    hand = { x: sh.x + side * armLen * outward, y: sh.y - armLen * vertical };
+  } else {
+    sh = { x: cx, y: neckY + u * 0.5 };
+    seg(cx, neckY, cx, hipY);
+    seg(cx, hipY, cx + u * 0.2, h - u * 0.3);
+    seg(cx, hipY, cx - u * 0.2, h - u * 0.3);
+    ctx.beginPath(); // nose → facing right
+    ctx.moveTo(cx + headR, headY);
+    ctx.lineTo(cx + headR + u * 0.35, headY + u * 0.15);
+    ctx.stroke();
+    tgt = { x: sh.x + armLen, y: sh.y };
+    hand = { x: sh.x + armLen * forward, y: sh.y - armLen * vertical };
+  }
+  ctx.save();
+  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(34,197,94,.7)';
+  seg(sh.x, sh.y, tgt.x, tgt.y);
+  ctx.restore();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(3, u * 0.45);
+  seg(sh.x, sh.y, hand.x, hand.y);
+  ctx.beginPath();
+  ctx.arc(hand.x, hand.y, ctx.lineWidth * 0.9, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ---------- orientation panel ----------
+function drawElevGauge(elev) {
+  const c = $('oriElev'), ctx = c.getContext('2d'), w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h - 12, r = h - 30;
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = '#1f2937';
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI); ctx.stroke();
+  // 0° (down) at left end … 180° (overhead) at right end
+  const ang = (d) => Math.PI + (d / 180) * Math.PI;
+  ctx.strokeStyle = 'rgba(34,197,94,.55)';
+  ctx.beginPath(); ctx.arc(cx, cy, r, ang(REP_COUNT), ang(110)); ctx.stroke();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, ang(Math.min(180, elev))); ctx.stroke();
+  ctx.fillStyle = '#9ca3af';
+  ctx.font = '18px system-ui';
+  ctx.fillText('down', 4, h - 2);
+  ctx.fillText('up', w - 26, h - 2);
+  ctx.fillText('90°', cx - 14, 20);
+}
+
+function drawDirCompass(plane, elev, ok) {
+  const c = $('oriDir'), ctx = c.getContext('2d'), w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  // top-down view: person at centre facing up the screen
+  const cx = w / 2, cy = h / 2 + 10, r = h / 2 - 10;
+  ctx.strokeStyle = '#1f2937';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = '#9ca3af';
+  ctx.font = '18px system-ui';
+  ctx.fillText('front', cx - 20, 18);
+  ctx.strokeStyle = '#e5e7eb';
+  ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.moveTo(cx - 22, cy); ctx.lineTo(cx + 22, cy); ctx.stroke(); // shoulders
+  ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fillStyle = '#e5e7eb'; ctx.fill();
+  // target direction
+  const side = W.leftArm ? -1 : 1; // top-down, facing up: their left is screen left
+  const tA = (EXK[W.kind].ideal * Math.PI) / 180;
+  ctx.setLineDash([5, 5]);
+  ctx.strokeStyle = 'rgba(34,197,94,.7)';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + side * Math.sin(tA) * r, cy - Math.cos(tA) * r); ctx.stroke();
+  ctx.setLineDash([]);
+  // arm (length = how far it is from vertical)
+  const len = r * Math.min(1, Math.sin((Math.min(elev, 180) * Math.PI) / 180) + 0.15);
+  const a = (plane * Math.PI) / 180;
+  ctx.strokeStyle = ok ? '#38bdf8' : '#f97316';
+  ctx.lineWidth = 7;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + side * Math.sin(a) * len, cy - Math.cos(a) * len); ctx.stroke();
+}
+
+function drawTrace() {
+  const c = $('oriTrace'), ctx = c.getContext('2d'), w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  const y = (d) => h - 8 - (Math.min(180, d) / 180) * (h - 16);
+  ctx.strokeStyle = 'rgba(34,197,94,.5)';
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath(); ctx.moveTo(0, y(REP_COUNT)); ctx.lineTo(w, y(REP_COUNT)); ctx.stroke();
+  ctx.setLineDash([]);
+  const pts = W.trace.slice(-300);
+  if (pts.length < 2) return;
+  ctx.lineWidth = 3;
+  for (let i = 1; i < pts.length; i++) {
+    const x0 = ((i - 1) / 299) * w, x1 = (i / 299) * w;
+    ctx.strokeStyle = pts[i].ok ? '#38bdf8' : '#f97316';
+    ctx.beginPath(); ctx.moveTo(x0, y(pts[i - 1].e)); ctx.lineTo(x1, y(pts[i].e)); ctx.stroke();
+  }
+}
+
+const dirText = (elev, p) => (elev < 30 ? '—' : p < 35 ? 'forward' : p < 55 ? 'diagonal' : p < 125 ? 'side' : 'behind');
+
+// ---------- screens ----------
+function wsShow(name) {
+  W.stage = name;
+  W.stageT = performance.now();
+  document.querySelectorAll('#watchScreen .ws').forEach((el) => el.classList.toggle('active', el.dataset.screen === name));
+  const ex = EXK[W.kind];
+  if (name === 'demo') {
+    $('wsDemoTitle').textContent = ex.title;
+    $('wsDemoSub').textContent = `${W.target} reps · ${W.leftArm ? 'left' : 'right'} arm`;
+    $('wsDemoCue').textContent = ex.cue;
+  }
+}
+
+function wsPrepare(kind) {
+  W.kind = kind;
+  wsShow('demo');
+}
+
+async function wsBegin() {
+  W.arm = newTracker(W.kind);
+  W.trace = [];
+  W.buf = [];
+  W.startedAt = Date.now();
+  wsShow('calibrate');
+  // make sure pose tracking runs if the camera is on
+  if (window.__camStream) {
     try {
-      if (act === 'start') {
-        const ex = W.screen === 'notify' ? $('wsNTitle').textContent.replace(/^Exercise:\s*/, '') : 'Mobility session';
-        await postJSON('/session/start', { by: 'watch', exercise: ex });
-      } else if (act === 'stop') {
-        await postJSON('/session/stop', { by: 'watch' });
-      } else {
-        wsShow('idle');
-      }
+      if (!landmarker) await initLandmarker();
+      startLoop();
     } catch (err) {
-      $('status').textContent = `Watch: ${err.message}`;
+      console.warn(err);
+    }
+  }
+  try {
+    await postJSON('/session/start', { by: 'watch', exercise: `${EXK[W.kind].title} × ${W.target}` });
+  } catch (err) {
+    $('status').textContent = `Watch: ${err.message}`;
+  }
+}
+
+async function wsStop() {
+  try {
+    await postJSON('/session/stop', { by: 'watch' });
+  } catch {
+    wsFinish(); // no active session on the server; still show the summary
+  }
+}
+
+function wsFinish() {
+  const a = W.arm || newTracker(W.kind);
+  flushArm();
+  W.active = null;
+  $('wsDoneIcon').textContent = a.reps >= W.target ? '✅' : '🏁';
+  $('wsDoneTitle').textContent = a.reps >= W.target ? 'Great work!' : 'Session ended';
+  $('wsDoneEx').textContent = EXK[W.kind].title;
+  $('wsSumReps').textContent = `${a.reps}/${W.target} (${a.attempts} tries)`;
+  $('wsSumBest').textContent = a.best ? `${Math.round(a.best)}°` : '--';
+  $('wsSumTime').textContent = fmtDur((Date.now() - W.startedAt) / 1000);
+  $('oriRec').textContent = `recorded ${W.trace.length} points · best ${Math.round(a.best)}° · ${a.reps} good reps`;
+  wsShow('done');
+}
+
+// ---------- recording: stream simulator/camera arm data like the watch would ----------
+function recordArm(src) {
+  const a = W.arm;
+  W.trace.push({ e: a.elev, p: a.plane, ok: a.elev < 45 || EXK[W.kind].ok(a.plane) });
+  if (W.trace.length > 3000) W.trace.shift();
+  if (!W.active || src === 'watch') return;
+  const prev = W.lastSample;
+  const dt = prev ? (performance.now() - prev.t) / 1000 : 0.04;
+  const gyroX = prev ? (((a.elev - prev.e) * Math.PI) / 180) / Math.max(dt, 0.001) : 0;
+  W.lastSample = { t: performance.now(), e: a.elev };
+  W.buf.push({
+    timestamp: new Date().toISOString(),
+    accel: { x: 0, y: 0, z: 0 },
+    gyro: { x: +gyroX.toFixed(3), y: 0, z: 0 },
+    source: "Kyle's Apple Watch",
+    sessionId: W.active.id,
+    simulated: true,
+    armSource: src,
+    arm: {
+      exercise: W.kind, elevationDeg: +a.elev.toFixed(1), directionDeg: +a.plane.toFixed(1),
+      calibrated: a.calibrated, reps: a.reps, targetReps: W.target
+    }
+  });
+}
+
+function flushArm() {
+  if (!W.buf.length) return;
+  const samples = W.buf.splice(0, 500);
+  postJSON('/ingest/batch', { samples }).catch(() => {});
+}
+setInterval(flushArm, 1000);
+
+// ---------- 25 Hz tick ----------
+function wsTick() {
+  const now = performance.now();
+  const d = new Date();
+  $('wsClock').textContent = `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const ex = EXK[W.kind];
+
+  if (W.stage === 'demo') {
+    const ph = (1 - Math.cos((2 * Math.PI * (now % 3000)) / 3000)) / 2;
+    drawFigure($('wsDemoFig'), ex.view, ph * REP_TARGET, ex.ideal, W.leftArm, '#facc15');
+  }
+
+  if (W.stage === 'calibrate' || W.stage === 'live') {
+    const src = pickSource();
+    W.srcNow = src;
+    if (src === 'camera' || src === 'demo') {
+      const inp = src === 'camera' ? cameraArm() : demoArm(now - W.stageT);
+      if (inp) trackerUpdate(W.arm, inp.elev, inp.plane, now);
+    }
+    const a = W.arm;
+    if (W.stage === 'calibrate' && a.calibrated) wsShow('live');
+    if (src !== 'none') recordArm(src);
+    if (src === 'none') a.hint = 'Waiting for live data from Kyle\u2019s Apple Watch…';
+
+    const t = fmtDur((Date.now() - W.startedAt) / 1000);
+    document.querySelectorAll('.wsTimer').forEach((el) => (el.textContent = t));
+    if (W.stage === 'calibrate') {
+      drawFigure($('wsCalFig'), 'side', a.elev, 0, W.leftArm, '#facc15');
+      $('wsCalBar').style.width = `${a.calib * 100}%`;
+      $('wsCalAngle').textContent = src === 'none' ? 'Waiting for watch data…' : `Arm angle ${Math.round(a.elev)}° · ${dirText(a.elev, a.plane)}`;
+    } else {
+      const ok = a.elev < 45 || ex.ok(a.plane);
+      const col = a.reached ? '#22c55e' : ok ? '#38bdf8' : '#f97316';
+      drawFigure($('wsLiveFig'), ex.view, a.elev, a.plane, W.leftArm, col);
+      $('wsReps').textContent = `${a.reps}/${W.target}`;
+      $('wsElev').textContent = `${Math.round(a.elev)}°`;
+      $('wsDir').textContent = dirText(a.elev, a.plane);
+      $('wsHint').textContent = a.hint || ex.cue;
+      $('wsHR2').textContent = `♥ ${W.hr ? Math.round(W.hr) : '--'}`;
+      if (a.reps >= W.target && src !== 'watch') wsStop();
+    }
+    $('oriRec').textContent = `● recording · ${W.trace.length} points · ${a.reps}/${W.target} reps · ${src}`;
+  }
+
+  const a = W.arm;
+  const elev = a ? a.elev : 0, plane = a ? a.plane : ex.ideal;
+  drawElevGauge(elev);
+  drawDirCompass(plane, elev, elev < 45 || ex.ok(plane));
+  $('oriElevTxt').textContent = `${Math.round(elev)}°`;
+  $('oriDirTxt').textContent = elev < 30 ? '—' : `${Math.round(plane)}° ${dirText(elev, plane)}`;
+  const srcLabel = { watch: 'real watch (live)', camera: 'camera (real body tracking)', demo: 'DEMO — scripted, not real', none: 'no live data — watch app not sending' };
+  const shownSrc = W.stage === 'calibrate' || W.stage === 'live' ? W.srcNow : pickSource();
+  $('wsSrcNow').textContent = `source: ${srcLabel[shownSrc] || shownSrc}`;
+  $('wsSrcNow').style.color = shownSrc === 'watch' ? '#22c55e' : shownSrc === 'none' || shownSrc === 'demo' ? '#f97316' : '';
+  $('wsMode').textContent = watchLive() ? '● live from watch' : 'waiting for watch';
+  if (now - (W.traceDrawn || 0) > 100) {
+    drawTrace();
+    W.traceDrawn = now;
+  }
+}
+setInterval(wsTick, 40);
+
+// ---------- buttons ----------
+document.querySelectorAll('#watchScreen [data-act]').forEach((b) => {
+  b.addEventListener('click', () => {
+    const act = b.dataset.act;
+    if (act === 'pick') wsPrepare(b.dataset.kind);
+    else if (act === 'fromPrompt') wsPrepare(kindFrom(`${$('wsNTitle').textContent} ${$('wsNBody').textContent}`));
+    else if (act === 'begin') wsBegin();
+    else if (act === 'stop') wsStop();
+    else if (act === 'home') wsShow('home');
+    else if (act === 'repsUp' || act === 'repsDown') {
+      W.target = Math.max(3, Math.min(20, W.target + (act === 'repsUp' ? 1 : -1)));
+      $('wsRepsSel').textContent = W.target;
     }
   });
 });
+$('wsSource').onchange = (e) => (W.source = e.target.value);
+$('wsWrist').onchange = (e) => (W.leftArm = e.target.value === 'L');
 
 $('wsPromptBtn').onclick = async () => {
   try {
@@ -1406,26 +1804,78 @@ $('wsPromptBtn').onclick = async () => {
   }
 };
 
-events.addEventListener('prompt', (e) => wsNotify(JSON.parse(e.data)));
+// ---------- server events ----------
+events.addEventListener('prompt', (e) => {
+  if (W.stage === 'calibrate' || W.stage === 'live') return; // don't interrupt a session
+  const p = JSON.parse(e.data);
+  $('wsNTitle').textContent = p.title;
+  $('wsNBody').textContent = p.message;
+  wsShow('notify');
+});
+
 events.addEventListener('session', (e) => {
   const d = JSON.parse(e.data);
-  if (d.state === 'started') wsStarted(d.session);
-  else wsStopped(d.session);
+  if (d.state === 'started') {
+    W.active = d.session;
+    W.lastSample = null;
+    // started elsewhere (dashboard or the real watch): jump straight into the session
+    if (W.stage !== 'calibrate' && W.stage !== 'live') {
+      W.kind = kindFrom(d.session.exercise || '');
+      W.arm = newTracker(W.kind);
+      W.trace = [];
+      W.startedAt = Date.parse(d.session.startedAt) || Date.now();
+      wsShow('calibrate');
+    }
+    $('status').textContent = `Session started from the ${d.session.startedBy}: ${d.session.exercise}`;
+  } else {
+    if (W.stage === 'calibrate' || W.stage === 'live') wsFinish();
+    W.active = null;
+    $('status').textContent = `Session saved: ${fmtDur(d.session.durationSec)}, ${d.session.samples} samples (stopped from the ${d.session.stoppedBy}).`;
+  }
 });
+
+// Real watch samples carry an `arm` object — mirror it exactly.
 events.addEventListener('motion', (e) => {
-  if (!W.active) return;
   const m = JSON.parse(e.data);
-  if (m.sessionId !== W.active.id) return;
-  W.samples += 1;
-  $('wsSamples').textContent = String(W.samples);
-  if (m.heartRate) $('wsHR').textContent = Math.round(m.heartRate);
-  $('wsMotion').textContent = `${Math.hypot(m.accel.x, m.accel.y, m.accel.z).toFixed(2)} g`;
+  if (m.heartRate) W.hr = m.heartRate;
+  if (!m.arm || m.simulated) return;
+  W.watchArmAt = performance.now();
+  if (W.source !== 'auto' && W.source !== 'watch') return;
+  if (W.stage !== 'calibrate' && W.stage !== 'live') {
+    W.kind = m.arm.exercise in EXK ? m.arm.exercise : W.kind;
+    W.arm = newTracker(W.kind);
+    W.trace = [];
+    W.startedAt = Date.now();
+    wsShow('calibrate');
+  }
+  const a = W.arm;
+  const prevReps = a.reps;
+  a.elev = m.arm.elevationDeg;
+  a.plane = m.arm.directionDeg;
+  a.calibrated = m.arm.calibrated;
+  a.calib = a.calibrated ? 1 : a.calib;
+  a.reps = m.arm.reps;
+  a.best = Math.max(a.best, a.elev);
+  a.reached = a.elev >= REP_COUNT;
+  if (m.arm.targetReps) W.target = m.arm.targetReps;
+  if (a.reps > prevReps) {
+    a.hint = 'Good rep!';
+    buzz('good');
+  }
 });
 
 fetch('/session')
   .then((r) => r.json())
-  .then((s) => (s.active ? wsStarted(s.active) : wsShow('idle')))
-  .catch(() => wsShow('idle'));
+  .then((s) => {
+    if (s.active) {
+      W.active = s.active;
+      W.kind = kindFrom(s.active.exercise || '');
+      W.arm = newTracker(W.kind);
+      W.startedAt = Date.parse(s.active.startedAt);
+      wsShow('calibrate');
+    } else wsShow('home');
+  })
+  .catch(() => wsShow('home'));
 fetch('/watch/info')
   .then((r) => r.json())
   .then((i) => ($('wsLan').textContent = i.lanUrls[0] || 'no Wi-Fi address found'))

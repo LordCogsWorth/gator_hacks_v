@@ -2,10 +2,16 @@
 
 Swift sources for the watchOS companion app. Flow:
 
-1. The dashboard sends an exercise prompt.
-2. The watch shows a notification with a **Start session** button.
-3. Tapping it starts recording: motion at 25 Hz plus heart rate, streamed to the dashboard.
-4. **Stop** ends the session.
+1. **Home:** pick **Arm raise to side** or **Forward reach** and set the number of reps (or tap **Start session** on a dashboard notification).
+2. **Demo:** an animated figure shows an example rep (side raise in front view, forward reach in side view), with instructions.
+3. **Begin session → Calibrate:** hold the watch arm straight out in front for 1.5 s. This sets "straight ahead" so the app can tell forward from sideways.
+4. **Live:** the figure's arm mirrors your real arm: its height comes from gravity, its direction from the calibrated heading.
+   - Reps count when the arm reaches about 75° or more in the right direction and comes back down.
+   - The watch gives a haptic tap at shoulder height and for each rep, with feedback such as "Move more out to the side".
+   - Motion, heart rate and arm angles stream to the dashboard (`arm` field on each sample).
+5. **Done:** reps, best height and time. The session ends automatically when you reach the rep goal.
+
+Files: `MobilityWatchApp.swift` (app + notifications), `WatchModel.swift` (flow, sensors, networking), `ArmTracker.swift` (orientation math + rep counting), `FigureView.swift` (stick figure + demo animation), `Exercise.swift`, `ContentView.swift` (screens).
 
 ## Install on "Kyle's Apple Watch" (about 10 minutes)
 
@@ -13,7 +19,7 @@ Swift sources for the watchOS companion app. Flow:
    - Product name: `MobilityWatch`
    - Interface: SwiftUI
    - Choose "Watch-only App"
-2. Delete the generated `ContentView.swift` and `MobilityWatchApp.swift`. Drag in the 3 `.swift` files from this folder and tick "Copy items if needed".
+2. Delete the generated `ContentView.swift` and `MobilityWatchApp.swift`. Drag in all 6 `.swift` files from this folder and tick "Copy items if needed".
 3. Set up the target's **Signing & Capabilities**:
    - Team: your Apple ID (Xcode → Settings → Accounts → add your Apple ID).
    - Add the **HealthKit** capability.
