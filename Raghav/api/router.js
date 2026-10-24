@@ -372,6 +372,7 @@ router.patch('/alerts/:id', wrap((req, res) => {
 /**
  * POST /plans/:id/approve — care team approves (and optionally edits) a plan
  * Body: { exercises?, sessionsPerWeek?, nextCheckin?, approvedBy }
+ * The patient's previously approved plan becomes 'superseded'.
  */
 router.post('/plans/:id/approve', wrap((req, res) => {
   const plans = store.readAll('plans');
@@ -384,7 +385,11 @@ router.post('/plans/:id/approve', wrap((req, res) => {
   if (errors.length > 0) {
     return badRequest(res, 'Invalid plan approval', errors);
   }
+  if (plans[index].status === 'dismissed' || plans[index].status === 'superseded') {
+    return res.status(409).json({ error: `Plan is ${plans[index].status} and can't be approved` });
+  }
 
+  const now = new Date().toISOString();
   const plan = { ...plans[index] };
   if (body.exercises !== undefined) {
     plan.exercises = body.exercises.map((e) => ({ exercise: e.exercise, reps: e.reps, target: e.target }));
@@ -393,7 +398,15 @@ router.post('/plans/:id/approve', wrap((req, res) => {
   if (body.nextCheckin !== undefined) plan.nextCheckin = body.nextCheckin;
   plan.status = 'approved';
   plan.approvedBy = body.approvedBy;
+  plan.approvedAt = now;
   plans[index] = plan;
+
+  // Only one approved plan per patient: retire the one this replaces.
+  plans.forEach((p, i) => {
+    if (i !== index && p.patientId === plan.patientId && p.status === 'approved') {
+      plans[i] = { ...p, status: 'superseded', supersededAt: now };
+    }
+  });
   store.writeAll('plans', plans);
 
   // Mirror next check-in onto the patient record.

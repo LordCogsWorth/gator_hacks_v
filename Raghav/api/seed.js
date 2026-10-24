@@ -8,7 +8,9 @@
  *   James  — plateau (~55% last 2 weeks), missed sessions recently
  *   Priya  — rising symmetry but high compensation; resting HR rising last week
  *
- * Plus one "suggested" plan per patient, then runs the rules engine.
+ * Plus one approved plan per patient, then runs the rules engine, which raises
+ * the alerts and drafts each patient's suggested plan (with its reason):
+ *   Maria → phase up, James → plateau tweak, Priya → lighter load for form.
  *
  * Usage: npm run seed
  *        SEED_TODAY=2026-10-24 npm run seed   (pretend "today" is another date)
@@ -60,8 +62,9 @@ function endedStamp(startedIso, minutes = 12) {
  * Build 6 ExerciseResult rows (3 exercises × 2 sides) for a given symmetry %.
  * healthy best is fixed; weak best = healthy * symmetry/100.
  * compensationPct applies to weak-arm results.
+ * offsets shifts symmetry per exercise, e.g. { hand_open: -6 }.
  */
-function buildResults(sessionId, symmetryPct, compensationPct) {
+function buildResults(sessionId, symmetryPct, compensationPct, offsets = {}) {
   const healthyBest = {
     arm_raise: 160,
     forward_reach: 150,
@@ -70,7 +73,7 @@ function buildResults(sessionId, symmetryPct, compensationPct) {
   const rows = [];
   for (const exercise of EXERCISES) {
     const h = healthyBest[exercise];
-    const w = Math.round((h * symmetryPct) / 100);
+    const w = Math.round((h * (symmetryPct + (offsets[exercise] || 0))) / 100);
     rows.push({
       id: store.makeId('er'),
       sessionId,
@@ -148,7 +151,7 @@ function buildPatients() {
  * skipDays = set of day offsets (from TODAY) to skip (missed sessions).
  * symmetryAt(dayOffset) and compensationAt(dayOffset) are functions.
  */
-function generateSessions(patientId, { skipDays, symmetryAt, compensationAt, painAt }) {
+function generateSessions(patientId, { skipDays, symmetryAt, compensationAt, painAt, offsets }) {
   const sessions = [];
   const results = [];
   // Days 20 ago through yesterday — about 3 weeks. Today is left empty so no
@@ -175,7 +178,7 @@ function generateSessions(patientId, { skipDays, symmetryAt, compensationAt, pai
       replayFile: null,
     };
     sessions.push(session);
-    results.push(...buildResults(session.id, symmetryAt(ago), compensationAt(ago)));
+    results.push(...buildResults(session.id, symmetryAt(ago), compensationAt(ago), offsets));
   }
   return { sessions, results };
 }
@@ -203,24 +206,6 @@ function generateWatch(patientId, { restingHrAt, bpSysAt, stepsAt, extras }) {
     });
   }
   return rows;
-}
-
-function suggestedPlan(patient, phase, sessionsPerWeek) {
-  return {
-    id: store.makeId('plan'),
-    patientId: patient.id,
-    phase,
-    exercises: [
-      { exercise: 'arm_raise', reps: 10, target: 90 + phase * 10 },
-      { exercise: 'forward_reach', reps: 10, target: 130 + phase * 5 },
-      { exercise: 'hand_open', reps: 12, target: 60 + phase * 8 },
-    ],
-    sessionsPerWeek,
-    status: 'suggested',
-    approvedBy: null,
-    nextCheckin: patient.nextCheckin,
-    createdAt: TODAY.toISOString(),
-  };
 }
 
 function approvedPlan(patient, phase, sessionsPerWeek) {
@@ -294,7 +279,6 @@ function seed() {
       })
     );
     allPlans.push(approvedPlan(maria, 2, 5));
-    allPlans.push(suggestedPlan(maria, 3, 5));
   }
 
   // ---- James: plateau ~55% last 2 weeks, missed recent sessions ----
@@ -310,6 +294,8 @@ function seed() {
       },
       compensationAt: () => 18,
       painAt: () => 3,
+      // Hand opening lags the other exercises, so the plateau suggestion targets it.
+      offsets: { hand_open: -6 },
     });
     for (const r of results) {
       if (r.side === 'weak') {
@@ -328,7 +314,6 @@ function seed() {
       })
     );
     allPlans.push(approvedPlan(james, 2, 5));
-    allPlans.push(suggestedPlan(james, 2, 4)); // same phase — care team may reduce load
   }
 
   // ---- Priya: rising symmetry, high compensation, rising RHR ----
@@ -362,7 +347,6 @@ function seed() {
       })
     );
     allPlans.push(approvedPlan(priya, 1, 5));
-    allPlans.push(suggestedPlan(priya, 1, 5));
   }
 
   store.writeAll('sessions', allSessions);
@@ -379,7 +363,7 @@ function seed() {
   console.log(`  sessions: ${allSessions.length}`);
   console.log(`  exerciseResults: ${allResults.length}`);
   console.log(`  watchDaily: ${allWatch.length}`);
-  console.log(`  plans: ${allPlans.length}`);
+  console.log(`  plans: ${store.readAll('plans').length} (incl. suggestions from the rules engine)`);
   for (const s of summary) {
     const types = s.alertsCreated.map((a) => a.type).join(', ') || '(none)';
     console.log(`  alerts for ${s.patientId}: ${types}`);

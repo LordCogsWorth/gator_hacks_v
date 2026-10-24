@@ -2,7 +2,8 @@
  * Rules engine for RehabTrack.
  *
  * Runs after each session upload (and after seeding).
- * - Suggests a next-phase plan when the patient is ready.
+ * - Drafts a suggested plan for the care team (phase up, plateau, or
+ *   compensation), with a plain-language reason. A clinician approves it.
  * - Raises alerts (plateau, setback, compensation, adherence, pain, HR, BP, fall).
  * - Never creates a duplicate "open" alert of the same type for the same patient.
  * - Doesn't re-raise an alert the care team acknowledged in the last 72h
@@ -28,6 +29,22 @@ const PHASE_TARGETS = {
   2: 65,
   3: 80,
   4: 90,
+};
+const MAX_PHASE = 4;
+
+// Upper bound for a plan target: degrees for the arm exercises, % for hand_open.
+const TARGET_CEILING = { arm_raise: 180, forward_reach: 180, hand_open: 100 };
+
+const DEFAULT_EXERCISES = [
+  { exercise: 'arm_raise', reps: 10, target: 90 },
+  { exercise: 'forward_reach', reps: 10, target: 140 },
+  { exercise: 'hand_open', reps: 12, target: 70 },
+];
+
+const EXERCISE_NAMES = {
+  arm_raise: 'arm raise',
+  forward_reach: 'forward reach',
+  hand_open: 'hand open',
 };
 
 // ---------------------------------------------------------------------------
@@ -93,11 +110,13 @@ function sessionTimeline(patientId, sessions, allResults) {
  * We look at sessions in the last 14 days and check if the range
  * (max - min) is under 5 percentage points.
  */
+function recentWithSymmetry(timeline, now = new Date(), days = 14) {
+  const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return timeline.filter((t) => t.symmetry != null && new Date(t.session.startedAt) >= since);
+}
+
 function isPlateau(timeline, now = new Date()) {
-  const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-  const recent = timeline.filter(
-    (t) => t.symmetry != null && new Date(t.session.startedAt) >= twoWeeksAgo
-  );
+  const recent = recentWithSymmetry(timeline, now);
   if (recent.length < 4) return false;
   const values = recent.map((t) => t.symmetry);
   const range = Math.max(...values) - Math.min(...values);
@@ -217,34 +236,162 @@ function shouldSuggestNextPhase(patient, timeline) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Plan suggestions
+// ---------------------------------------------------------------------------
+
+const round1 = (n) => Math.round(n * 10) / 10;
+const mean = (values) => values.reduce((a, b) => a + b, 0) / values.length;
+
+/** { sessions, avgSymmetry, avgCompensation } for the entries a rule looked at. */
+function basedOnSummary(entries) {
+  const sym = entries.map((t) => t.symmetry).filter((v) => v != null);
+  const comp = entries.map((t) => t.compensation).filter((v) => v != null);
+  return {
+    sessions: entries.length,
+    avgSymmetry: sym.length ? round1(mean(sym)) : null,
+    avgCompensation: comp.length ? round1(mean(comp)) : null,
+  };
+}
+
+function clampTarget(exercise, target) {
+  return Math.min(Math.round(target), TARGET_CEILING[exercise] ?? 180);
+}
+
 /**
- * Build a suggested plan draft (does not write to disk by itself).
+ * Decide whether the care team should see a plan change, from the sessions
+ * given (callers pass only sessions recorded after the last plan decision).
+ * Checked in priority order: compensation (form first), ready, plateau.
+ *
+ * Returns { kind, phase, exercises, reason, basedOn } or null. Pure: no I/O.
  */
-function buildSuggestedPlan(patient, currentPlan) {
-  const nextPhase = Math.min((patient.phase || 1) + 1, 4);
-  const baseExercises = (currentPlan && currentPlan.exercises) || [
-    { exercise: 'arm_raise', reps: 10, target: 90 },
-    { exercise: 'forward_reach', reps: 10, target: 140 },
-    { exercise: 'hand_open', reps: 12, target: 70 },
-  ];
+function suggestPlanChange(patient, timeline, currentPlan, now = new Date()) {
+  const phase = patient.phase || 1;
+  const base = (currentPlan && currentPlan.exercises) || DEFAULT_EXERCISES;
+  const last3 = timeline.slice(-3);
 
-  // Bump targets a bit for the next phase.
-  const exercises = baseExercises.map((e) => ({
-    ...e,
-    target: Math.min(Math.round(e.target * 1.1), e.exercise === 'hand_open' ? 100 : 180),
-  }));
+  // 1. Compensation: leaning / shoulder hiking in most weak-arm reps.
+  if (last3.length === 3 && last3.every((t) => t.compensation != null)) {
+    const basedOn = basedOnSummary(last3);
+    if (basedOn.avgCompensation > 50) {
+      return {
+        kind: 'compensation',
+        phase,
+        exercises: base.map((e) => ({
+          exercise: e.exercise,
+          reps: Math.max(1, Math.round(e.reps * 0.8)),
+          target: clampTarget(e.exercise, e.target * 0.9),
+        })),
+        reason:
+          `Compensation averaged ${Math.round(basedOn.avgCompensation)}% of weak-arm reps over the last 3 sessions (threshold 50%). ` +
+          `Stay in phase ${phase} with 20% fewer reps and 10% lower targets so the patient can focus on form ` +
+          `(no leaning or shoulder hiking).`,
+        basedOn,
+      };
+    }
+  }
 
+  // 2. Ready: last 3 sessions above the phase target with low compensation.
+  if (phase < MAX_PHASE && shouldSuggestNextPhase(patient, timeline)) {
+    const basedOn = basedOnSummary(last3);
+    const capped = [];
+    const exercises = base.map((e) => {
+      let target = clampTarget(e.exercise, e.target * 1.1);
+      // Never suggest an arm-raise target above the clinician's safety limit.
+      if (e.exercise === 'arm_raise' && typeof patient.maxRaiseAngle === 'number' && target > patient.maxRaiseAngle) {
+        target = patient.maxRaiseAngle;
+        capped.push(`arm raise capped at the ${patient.maxRaiseAngle}° safety limit`);
+      }
+      return { exercise: e.exercise, reps: e.reps, target };
+    });
+    return {
+      kind: 'phase-up',
+      phase: phase + 1,
+      exercises,
+      reason:
+        `Symmetry averaged ${Math.round(basedOn.avgSymmetry)}% over the last 3 sessions, above the phase ${phase} target of ` +
+        `${PHASE_TARGETS[phase]}%, with ${Math.round(basedOn.avgCompensation)}% compensation. ` +
+        `Move to phase ${phase + 1} with targets raised 10%` +
+        (capped.length ? ` (${capped.join('; ')}).` : '.'),
+      basedOn,
+    };
+  }
+
+  // 3. Plateau: flat for 2 weeks. Shift volume to the weakest exercise.
+  if (isPlateau(timeline, now)) {
+    const recent = recentWithSymmetry(timeline, now);
+    const values = recent.map((t) => t.symmetry);
+    const byExercise = base
+      .map((e) => {
+        const sym = recent
+          .map((t) => symmetryForExercise(t.results, e.exercise))
+          .filter((v) => v != null);
+        return { exercise: e.exercise, avg: sym.length ? mean(sym) : Infinity };
+      })
+      .sort((a, b) => a.avg - b.avg);
+    const weakest = byExercise[0].exercise;
+
+    let change = '';
+    const exercises = base.map((e) => {
+      if (e.exercise !== weakest) return { ...e };
+      const reps = Math.max(e.reps + 1, Math.round(e.reps * 1.2));
+      const target = clampTarget(e.exercise, e.target * 0.95);
+      change = `more reps (${e.reps} → ${reps}) at an easier target (${e.target} → ${target})`;
+      return { exercise: e.exercise, reps, target };
+    });
+    const weakestAvg = byExercise[0].avg;
+    return {
+      kind: 'plateau',
+      phase,
+      exercises,
+      reason:
+        `Symmetry has stayed between ${Math.round(Math.min(...values))}% and ${Math.round(Math.max(...values))}% ` +
+        `over ${recent.length} sessions in the last 14 days. Weakest exercise is ${EXERCISE_NAMES[weakest]}` +
+        (Number.isFinite(weakestAvg) ? ` (${Math.round(weakestAvg)}%)` : '') +
+        `: ${change}, to shift practice to where progress lags.`,
+      basedOn: basedOnSummary(recent),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Turn a suggestPlanChange() result into a 'suggested' plan record
+ * (does not write to disk by itself).
+ */
+function buildSuggestedPlan(patient, currentPlan, change, now = new Date()) {
   return {
     id: store.makeId('plan'),
     patientId: patient.id,
-    phase: nextPhase,
-    exercises,
+    phase: change.phase,
+    exercises: change.exercises,
     sessionsPerWeek: (currentPlan && currentPlan.sessionsPerWeek) || 5,
     status: 'suggested',
     approvedBy: null,
     nextCheckin: patient.nextCheckin,
-    createdAt: new Date().toISOString(),
+    createdAt: now.toISOString(),
+    kind: change.kind,
+    reason: change.reason,
+    basedOn: change.basedOn,
   };
+}
+
+/**
+ * Latest time the care team approved or dismissed a plan for this patient
+ * (ISO string), or null. Older approved plans without approvedAt fall back
+ * to createdAt.
+ */
+function lastPlanDecisionAt(plans, patientId) {
+  let latest = null;
+  for (const p of plans) {
+    if (p.patientId !== patientId) continue;
+    const approvedAt = p.approvedAt || (p.status === 'approved' || p.status === 'superseded' ? p.createdAt : null);
+    for (const t of [approvedAt, p.dismissedAt]) {
+      if (t && (!latest || t > latest)) latest = t;
+    }
+  }
+  return latest;
 }
 
 // ---------------------------------------------------------------------------
@@ -360,7 +507,7 @@ function evaluatePatient(patientId, options = {}) {
     store.writeAll('alerts', alerts);
   }
 
-  // --- Suggest next phase if ready and no open suggested plan ---
+  // --- Suggest a plan change (at most one open 'suggested' plan per patient) ---
   let planSuggested = null;
   const hasSuggested = plans.some(
     (p) => p.patientId === patientId && p.status === 'suggested'
@@ -369,10 +516,17 @@ function evaluatePatient(patientId, options = {}) {
     .filter((p) => p.patientId === patientId && p.status === 'approved')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
-  if (!hasSuggested && shouldSuggestNextPhase(patient, timeline)) {
-    planSuggested = buildSuggestedPlan(patient, approved);
-    plans.push(planSuggested);
-    store.writeAll('plans', plans);
+  if (!hasSuggested) {
+    // Only look at sessions recorded after the care team's last approve/dismiss,
+    // so a decision isn't immediately second-guessed using the same data.
+    const decidedAt = lastPlanDecisionAt(plans, patientId);
+    const fresh = decidedAt ? timeline.filter((t) => t.session.startedAt > decidedAt) : timeline;
+    const change = suggestPlanChange(patient, fresh, approved, now);
+    if (change) {
+      planSuggested = buildSuggestedPlan(patient, approved, change, now);
+      plans.push(planSuggested);
+      store.writeAll('plans', plans);
+    }
   }
 
   return { alertsCreated: created, planSuggested };
@@ -405,7 +559,10 @@ module.exports = {
   missedSessionStreak,
   restingHrSpike,
   shouldSuggestNextPhase,
+  suggestPlanChange,
   buildSuggestedPlan,
+  lastPlanDecisionAt,
+  MAX_PHASE,
   hasOpenAlert,
   evaluatePatient,
   evaluateAll,

@@ -18,6 +18,7 @@ const store = require('./store');
 const {
   evaluatePatient,
   isCoolingDown,
+  suggestPlanChange,
   symmetryForExercise,
   avgSymmetry,
   avgCompensation,
@@ -302,5 +303,109 @@ describe('evaluatePatient', () => {
     store.append('watchDaily', { id: 'wd-2', patientId: 'p-test', date: '2026-10-25', bpSys: 152 });
     const nextDay = new Date('2026-10-25T12:00:00.000Z');
     assert.ok(evaluatePatient('p-test', { now: nextDay }).alertsCreated.some((a) => a.type === 'blood-pressure'));
+  });
+});
+
+describe('suggestPlanChange', () => {
+  const NOW = new Date('2026-10-24T12:00:00.000Z');
+  const plan = {
+    sessionsPerWeek: 5,
+    exercises: [
+      { exercise: 'arm_raise', reps: 10, target: 100 },
+      { exercise: 'forward_reach', reps: 10, target: 130 },
+      { exercise: 'hand_open', reps: 12, target: 70 },
+    ],
+  };
+  // Session entry whose hand_open lags the other exercises by 10 points.
+  function entryWithResults(startedAt, sym, comp) {
+    const e = entry(startedAt, sym, comp);
+    e.results = [
+      result('arm_raise', 'healthy', 100), result('arm_raise', 'weak', sym),
+      result('forward_reach', 'healthy', 100), result('forward_reach', 'weak', sym),
+      result('hand_open', 'healthy', 100), result('hand_open', 'weak', sym - 10),
+    ];
+    return e;
+  }
+
+  it('ready: suggests phase + 1 with targets +10% and a reason with the numbers', () => {
+    const timeline = [70, 71, 72].map((v, i) => entry(`2026-10-2${i}T12:00:00.000Z`, v, 10));
+    const change = suggestPlanChange({ phase: 2, maxRaiseAngle: 180 }, timeline, plan, NOW);
+    assert.equal(change.kind, 'phase-up');
+    assert.equal(change.phase, 3);
+    assert.deepEqual(change.exercises.map((e) => e.target), [110, 143, 77]);
+    assert.deepEqual(change.basedOn, { sessions: 3, avgSymmetry: 71, avgCompensation: 10 });
+    assert.match(change.reason, /71%.*phase 2 target of 65%/);
+  });
+
+  it('ready: caps the arm-raise target at the patient max angle', () => {
+    const timeline = [70, 71, 72].map((v, i) => entry(`2026-10-2${i}T12:00:00.000Z`, v, 10));
+    const change = suggestPlanChange({ phase: 2, maxRaiseAngle: 105 }, timeline, plan, NOW);
+    assert.equal(change.exercises[0].target, 105);
+  });
+
+  it('never suggests past phase 4', () => {
+    const timeline = [95, 96, 97].map((v, i) => entry(`2026-10-2${i}T12:00:00.000Z`, v, 5));
+    assert.equal(suggestPlanChange({ phase: 4 }, timeline, plan, NOW), null);
+  });
+
+  it('plateau: same phase, more reps and -5% target on the weakest exercise', () => {
+    const timeline = [55, 56, 55, 54, 55].map((v, i) => entryWithResults(`2026-10-1${5 + i}T12:00:00.000Z`, v, 15));
+    const change = suggestPlanChange({ phase: 2 }, timeline, plan, NOW);
+    assert.equal(change.kind, 'plateau');
+    assert.equal(change.phase, 2);
+    assert.deepEqual(change.exercises[2], { exercise: 'hand_open', reps: 14, target: 67 });
+    assert.deepEqual(change.exercises[0], plan.exercises[0]); // others unchanged
+    assert.equal(change.basedOn.sessions, 5);
+    assert.match(change.reason, /between 54% and 56%.*hand open/);
+  });
+
+  it('compensation: same phase, reps -20% and targets -10%', () => {
+    const timeline = [55, 56, 57].map((v, i) => entry(`2026-10-2${i}T12:00:00.000Z`, v, 60));
+    const change = suggestPlanChange({ phase: 1 }, timeline, plan, NOW);
+    assert.equal(change.kind, 'compensation');
+    assert.equal(change.phase, 1);
+    assert.deepEqual(change.exercises.map((e) => [e.reps, e.target]), [[8, 90], [8, 117], [10, 63]]);
+    assert.match(change.reason, /form/);
+  });
+
+  it('returns null when nothing stands out', () => {
+    const timeline = [40, 48, 56].map((v, i) => entry(`2026-10-2${i}T12:00:00.000Z`, v, 20));
+    assert.equal(suggestPlanChange({ phase: 2 }, timeline, plan, NOW), null);
+  });
+});
+
+describe('evaluatePatient plan suggestions', () => {
+  const NOW = new Date('2026-10-24T12:00:00.000Z');
+
+  // Three sessions with 60% compensation → compensation suggestion.
+  beforeEach(() => {
+    for (const name of ['sessions', 'exerciseResults', 'watchDaily', 'alerts', 'plans']) {
+      store.writeAll(name, []);
+    }
+    store.writeAll('patients', [
+      { id: 'p-test', name: 'Test', weakSide: 'left', phase: 1, nextCheckin: '2026-10-30', bpLimitSys: 140 },
+    ]);
+    const sessions = [];
+    const results = [];
+    for (const day of [21, 22, 23]) {
+      const id = `sess-${day}`;
+      sessions.push({ id, patientId: 'p-test', startedAt: `2026-10-${day}T09:00:00.000Z`, pain: 2, tiredness: 2 });
+      results.push({ ...result('arm_raise', 'healthy', 160), sessionId: id });
+      results.push({ ...result('arm_raise', 'weak', 100, 60), sessionId: id });
+    }
+    store.writeAll('sessions', sessions);
+    store.writeAll('exerciseResults', results);
+  });
+
+  it('keeps at most one open suggested plan', () => {
+    assert.ok(evaluatePatient('p-test', { now: NOW }).planSuggested);
+    assert.equal(evaluatePatient('p-test', { now: NOW }).planSuggested, null);
+    assert.equal(store.readAll('plans').filter((p) => p.status === 'suggested').length, 1);
+  });
+
+  it('does not re-suggest from sessions the care team already decided on', () => {
+    const { planSuggested } = evaluatePatient('p-test', { now: NOW });
+    store.writeAll('plans', [{ ...planSuggested, status: 'dismissed', dismissedAt: '2026-10-24T10:00:00.000Z' }]);
+    assert.equal(evaluatePatient('p-test', { now: NOW }).planSuggested, null);
   });
 });

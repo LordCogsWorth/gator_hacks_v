@@ -178,3 +178,36 @@ describe('errors are JSON', () => {
     assert.ok((await res.json()).error);
   });
 });
+
+describe('POST /plans/:id/approve', () => {
+  const exercises = [{ exercise: 'arm_raise', reps: 10, target: 100 }];
+  beforeEach(() => {
+    store.writeAll('plans', [
+      { id: 'plan-old', patientId: 'p-test', phase: 1, exercises, sessionsPerWeek: 5, status: 'approved', approvedBy: 'Dr. Chen', nextCheckin: '2026-10-30', createdAt: '2026-10-01T12:00:00.000Z' },
+      { id: 'plan-new', patientId: 'p-test', phase: 2, exercises, sessionsPerWeek: 5, status: 'suggested', approvedBy: null, nextCheckin: '2026-10-30', createdAt: '2026-10-24T12:00:00.000Z', reason: 'Ready', basedOn: { sessions: 3, avgSymmetry: 70, avgCompensation: 10 } },
+      { id: 'plan-gone', patientId: 'p-test', phase: 2, exercises, sessionsPerWeek: 5, status: 'dismissed', approvedBy: null, nextCheckin: '2026-10-30', createdAt: '2026-10-20T12:00:00.000Z' },
+    ]);
+  });
+
+  it('approves with edits and supersedes the previous approved plan', async () => {
+    const res = await post('/plans/plan-new/approve', { approvedBy: 'Dr. Chen', sessionsPerWeek: 6, nextCheckin: '2026-11-04' });
+    assert.equal(res.status, 200);
+    const plan = await res.json();
+    assert.equal(plan.status, 'approved');
+    assert.equal(plan.sessionsPerWeek, 6);
+    assert.ok(plan.approvedAt);
+    const byId = Object.fromEntries(store.readAll('plans').map((p) => [p.id, p]));
+    assert.equal(byId['plan-old'].status, 'superseded');
+    assert.equal(store.findById('patients', 'p-test').phase, 2);
+    const current = await (await fetch(`${base}/patients/p-test/plan`)).json();
+    assert.equal(current.id, 'plan-new');
+  });
+
+  it('rejects bad edits with 400 and a dismissed plan with 409', async () => {
+    let res = await post('/plans/plan-new/approve', { approvedBy: '', sessionsPerWeek: 0 });
+    assert.equal(res.status, 400);
+    assert.deepEqual((await res.json()).details.map((d) => d.field).sort(), ['approvedBy', 'sessionsPerWeek']);
+    res = await post('/plans/plan-gone/approve', { approvedBy: 'Dr. Chen' });
+    assert.equal(res.status, 409);
+  });
+});

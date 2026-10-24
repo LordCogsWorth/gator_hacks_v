@@ -83,7 +83,7 @@ List all patients with a summary for the care-team list. Flagged patients (any o
 
 ## GET /api/patients/:id
 
-One patient, their current plan (suggested if one exists, else approved), the approved plan, and open alerts.
+One patient, their current plan (suggested if one exists, else approved), the approved plan, and open alerts. See [Plans](#plans) for every plan field.
 
 **Example:** `GET /api/patients/p-maria`
 
@@ -113,7 +113,10 @@ One patient, their current plan (suggested if one exists, else approved), the ap
     "status": "suggested",
     "approvedBy": null,
     "nextCheckin": "2026-10-28",
-    "createdAt": "2026-10-24T12:00:00.000Z"
+    "createdAt": "2026-10-24T12:00:00.000Z",
+    "kind": "phase-up",
+    "reason": "Symmetry averaged 69% over the last 3 sessions, above the phase 2 target of 65%, with 12% compensation. Move to phase 3 with targets raised 10%.",
+    "basedOn": { "sessions": 3, "avgSymmetry": 69.4, "avgCompensation": 11.7 }
   },
   "approvedPlan": {
     "id": "plan-…",
@@ -138,6 +141,34 @@ One patient, their current plan (suggested if one exists, else approved), the ap
 ```json
 { "error": "Patient not found" }
 ```
+
+---
+
+## Plans
+
+A plan record (returned by the plan endpoints and inside `GET /patients/:id`):
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id`, `patientId` | string | |
+| `phase` | 1–4 | |
+| `exercises` | `{ exercise, reps, target }[]` | `target` = degrees (arm exercises) or % (hand_open) |
+| `sessionsPerWeek` | number | |
+| `status` | `"suggested"` \| `"approved"` \| `"superseded"` \| `"dismissed"` | one `approved` plan per patient at a time |
+| `approvedBy` | string \| null | |
+| `nextCheckin` | `"YYYY-MM-DD"` | |
+| `createdAt` | ISO | |
+| `approvedAt` | ISO, optional | set on approval |
+| `supersededAt` / `dismissedAt` | ISO, optional | set when the plan is retired |
+| `kind` | `"phase-up"` \| `"plateau"` \| `"compensation"`, optional | only on rules-engine suggestions |
+| `reason` | string, optional | plain-language explanation, only on suggestions |
+| `basedOn` | `{ sessions, avgSymmetry, avgCompensation }`, optional | the sessions the rule looked at (averages rounded to 0.1) |
+
+**How suggestions are made.** After every session or watch upload the rules engine may draft one `suggested` plan per patient (never more than one open). It only looks at sessions recorded *after* the care team's last approve/dismiss for that patient, so a decision isn't immediately re-suggested from the same data. Checked in this order:
+
+1. **Compensation** — average compensation over the last 3 sessions > 50% → same phase, reps −20%, targets −10%, focus on form.
+2. **Ready** — last 3 sessions all at or above the phase target (`GET /config`) with compensation < 20% → phase + 1 (never past 4), targets +10% (arm raise capped at the patient's `maxRaiseAngle`).
+3. **Plateau** — symmetry within a 5-point range over 4+ sessions in 14 days → same phase; the weakest exercise gets reps +20% and target −5%.
 
 ---
 
@@ -441,6 +472,8 @@ After 72 hours the alert can be raised again from the same data.
 
 Care team approves a plan (usually a `suggested` one). You can edit exercises / frequency / next check-in in the same call. `approvedBy` is required.
 
+The patient's previously approved plan becomes `"superseded"`, so `GET /patients/:id/plan` immediately returns the new one.
+
 **Request body**
 ```json
 {
@@ -459,8 +492,9 @@ Care team approves a plan (usually a `suggested` one). You can edit exercises / 
 
 **Validation:** `approvedBy` non-empty string; `exercises` non-empty array of `{ exercise, reps (whole number ≥ 1), target (number > 0) }`; `sessionsPerWeek` whole number 1–14; `nextCheckin` `YYYY-MM-DD`. Errors → `400 { error: "Invalid plan approval", details: [...] }`.
 
-**Response `200`** — the plan with `status: "approved"` and `approvedBy` set.  
-Also updates the patient’s `nextCheckin` and `phase` when provided.
+**Response `200`** — the plan with `status: "approved"`, `approvedBy` and `approvedAt` set.  
+Also updates the patient’s `nextCheckin` and `phase`.  
+**Response `409`** if the plan is `dismissed` or `superseded`.
 
 ---
 

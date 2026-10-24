@@ -123,6 +123,30 @@ The API validates the whole body before saving anything and answers `400 { error
 
 Replays are uploaded separately: `POST /api/sessions/:id/replay` with a `ReplayFile` body (phase 3).
 
+## 5b. Plan (Raghav's API → Lucas's patient app)
+
+`GET /api/patients/:id/plan` returns the approved plan the patient follows today:
+
+```ts
+interface Plan {
+  id: string;
+  patientId: string;
+  phase: number;                   // 1–4
+  exercises: { exercise: Exercise; reps: number; target: number }[];
+  sessionsPerWeek: number;
+  status: 'suggested' | 'approved' | 'superseded' | 'dismissed';
+  approvedBy: string | null;
+  nextCheckin: string;             // YYYY-MM-DD
+  createdAt: string;
+  approvedAt?: string;
+  kind?: 'phase-up' | 'plateau' | 'compensation';    // rules-engine suggestions only
+  reason?: string;                                    // why the rules engine suggested it
+  basedOn?: { sessions: number; avgSymmetry: number; avgCompensation: number };
+}
+```
+
+The rules engine drafts `suggested` plans; only a clinician's approval makes one `approved` (the old one becomes `superseded`). The patient app should only ever show the approved plan.
+
 ## 6. Watch daily data (iPhone Shortcut → Raghav's API)
 
 `POST /api/watch/daily`
