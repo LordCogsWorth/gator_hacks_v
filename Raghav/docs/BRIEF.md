@@ -40,12 +40,12 @@ Recovery comes from the brain rewiring through lots of repetition (neuroplastici
 | Person | Owns | Folder |
 | --- | --- | --- |
 | Raghav | Backend API (shared by everyone) + care-team dashboard | `Raghav/` |
-| Lucas | Patient web app (calls Raghav's API over HTTP) | `Raghav/web/src/patient/` (moved from `leonardo/patient-app`) |
+| Lucas | Patient web app (calls Raghav's API over HTTP) | `Raghav/web/src/patient/` |
 | Stuti | Camera module: MediaPipe pose + hand tracking, angles, reps, compensation, 3D replay recording | `stuti/` |
 | Kyle | Watch app + Express watch server (already in `main/`), iPhone Shortcut, overall integration | `Kyle/`, `main/` |
 | Justin | Watch / iPhone data with Kyle | `justin/` |
 
-Rule: each person only edits their own folder. `main/` is the integration folder owned by Kyle. Code is merged into `main/` near the end.
+Rule: each person only edits their own folder (Lucas's is `Raghav/web/src/patient/`). `main/` is the integration folder owned by Kyle. Code is merged into `main/` near the end.
 
 ## 4. Rehab workflow (the loop)
 

@@ -1,6 +1,6 @@
 # RehabTrack — Raghav (API + care-team dashboard)
 
-This folder is the **shared backend** everyone else calls, plus the **web app**: the care-team dashboard and the patient app (Lucas's, moved here from `leonardo/patient-app`).
+This folder is the **shared backend** everyone else calls, plus the **web app**: the care-team dashboard and the patient app (Lucas's; it used to be `leonardo/patient-app`, now deleted).
 
 - `api/` — Node + Express. Port **8081**. JSON-file storage. Mountable later into Kyle’s server at `/api`.
 - `web/` — one React app on port **5173** with two areas: care dashboard at `/care`, patient app at `/patient`. They share one API client (`src/api.ts`), one set of types (`src/types.ts`) and one camera layer (`src/camera/`).

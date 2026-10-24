@@ -7,7 +7,7 @@ RehabTrack helps stroke patients recover arm function at home: camera sessions, 
 ## Repo rules
 
 - One folder per teammate, everyone commits to main, no branches.
-- Agents work ONLY inside Raghav/. Never edit Kyle/, main/, stuti/, justin/, leonardo/ or anything outside Raghav/ (may read them).
+- Agents work ONLY inside Raghav/. Never edit Kyle/, main/, stuti/, justin/ or anything outside Raghav/ (may read them). Lucas has no separate folder any more: his patient app is `Raghav/web/src/patient/**` (the old `leonardo/` folder was deleted; it stays in git history).
 - Teammates: Lucas = patient app (`web/src/patient/**`, calls this API); Kyle + Justin = iPhone/Apple Watch (Kyle's server main/server, port 8080); Stuti = camera/CV (MediaPipe, implements the `CameraTracker` contract).
 - Ownership inside `web/`: Lucas owns Raghav/web/src/patient/**; Raghav owns the API, the care area, and the shared files src/api.ts, src/types.ts, src/camera/**, App.tsx, tailwind.config.js (also src/Brand.tsx and src/usePolling.ts). If patient work needs a shared-file change, ask Raghav.
 - Small commits with clear messages. Never push unless asked.
@@ -74,7 +74,7 @@ Demo ids: `p-maria` (improving → phase-up), `p-james` (plateau + adherence), `
 - One web app: care dashboard at `/care` (flagged list, detail charts, alerts incl. "Safety stop", suggested-plan review/approve/dismiss, live polling, reference lines), patient app at `/patient` (Lucas's screens backed by the API: dashboard, check-in, coached session, summary with "vs last week", safety stop, history, progress chart, messages/settings demo-only, patient switcher), redirects for old links
 - Camera contract = `CameraTracker`; one fake tracker with demo options; app-built ExerciseResult (fatigue ratio, hike in metres) and per-round ReplayFile; sessions and replays validated by the API (201) in the browser loop
 - Demo controls panel (`?demo=1`): symmetry, compensation, speed-up; new-plan banner within 5 s of approval
-- `leonardo/patient-app` frozen with `MOVED.md`
+- Old `leonardo/` folder deleted: `Raghav/web/src/patient/**` is the single source of truth for the patient app
 
 **Not done**
 
