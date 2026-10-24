@@ -8,10 +8,10 @@ import { usePatientData } from '../PatientData';
 import { speak, useMuted } from '../voice/useVoice';
 
 const NAV = [
-  { to: '/patient', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/patient/sessions', label: 'Sessions', icon: History },
-  { to: '/patient/messages', label: 'Messages', icon: MessageSquare },
-  { to: '/patient/settings', label: 'Settings', icon: Settings },
+  { to: '/patient', label: 'Dashboard', short: 'Home', icon: LayoutDashboard, end: true },
+  { to: '/patient/sessions', label: 'Sessions', short: 'Sessions', icon: History },
+  { to: '/patient/messages', label: 'Messages', short: 'Messages', icon: MessageSquare },
+  { to: '/patient/settings', label: 'Settings', short: 'Settings', icon: Settings },
 ];
 
 const TITLES: Record<string, [string, string]> = {
@@ -81,14 +81,18 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {/* Narrow screens: the sidebar becomes a row of tabs. */}
-        <nav className="flex gap-1 overflow-x-auto border-b border-neutral-800 px-2 py-2 lg:hidden">
+        {/* Narrow screens: the sidebar becomes a tab bar fixed to the bottom, every item visible. */}
+        <nav
+          aria-label="Main"
+          className="fixed inset-x-0 bottom-0 z-40 flex border-t border-neutral-800 bg-neutral-900 px-1 pb-[env(safe-area-inset-bottom)] pt-1 lg:hidden"
+        >
           {NAV.map((n) => (
-            <NavItem key={n.to} {...n} compact />
+            <TabItem key={n.to} {...n} />
           ))}
         </nav>
 
-        <main className="w-full max-w-7xl flex-1 px-4 py-6 sm:px-8">
+        {/* Bottom padding on narrow screens keeps content clear of the fixed tab bar. */}
+        <main className="w-full max-w-7xl flex-1 px-4 pb-28 pt-6 sm:px-8 lg:pb-6">
           {connectionError && (
             <p className="mb-4 rounded-xl border border-amber-700 bg-amber-950 px-4 py-3 text-lg text-amber-100">
               Can't reach your care team right now. Retrying…
@@ -113,7 +117,7 @@ function Logo() {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end, compact }: (typeof NAV)[number] & { compact?: boolean }) {
+function NavItem({ to, label, icon: Icon, end }: (typeof NAV)[number]) {
   return (
     <NavLink
       to={to}
@@ -121,11 +125,29 @@ function NavItem({ to, label, icon: Icon, end, compact }: (typeof NAV)[number] &
       className={({ isActive }) =>
         `flex min-h-[52px] shrink-0 items-center gap-3 rounded-xl px-4 text-lg font-medium transition-colors ${
           isActive ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-300 hover:bg-neutral-800'
-        } ${compact ? 'text-base' : ''}`
+        }`
       }
     >
       <Icon className="h-5 w-5" />
       {label}
+    </NavLink>
+  );
+}
+
+/** One bottom-bar tab: icon over a short label, same active colours as the sidebar. */
+function TabItem({ to, short, icon: Icon, end }: (typeof NAV)[number]) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `flex min-h-[64px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 text-sm font-medium transition-colors ${
+          isActive ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-300 hover:bg-neutral-800'
+        }`
+      }
+    >
+      <Icon className="h-6 w-6" />
+      {short}
     </NavLink>
   );
 }
