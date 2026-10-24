@@ -49,6 +49,24 @@ Is the API running?
 
 ---
 
+## GET /api/config
+
+Rule constants the dashboard draws (e.g. the phase-target line on the symmetry chart).
+
+**Response `200`**
+```json
+{
+  "phaseTargets": { "1": 50, "2": 65, "3": 80, "4": 90 },
+  "maxPhase": 4,
+  "exercises": ["arm_raise", "forward_reach", "hand_open"],
+  "alertCooldownHours": 72
+}
+```
+
+`phaseTargets` = symmetry % the weak arm should reach before moving to the next phase.
+
+---
+
 ## GET /api/patients
 
 List all patients with a summary for the care-team list. Flagged patients (any open alert) come first.
@@ -495,6 +513,20 @@ The patient's previously approved plan becomes `"superseded"`, so `GET /patients
 **Response `200`** — the plan with `status: "approved"`, `approvedBy` and `approvedAt` set.  
 Also updates the patient’s `nextCheckin` and `phase`.  
 **Response `409`** if the plan is `dismissed` or `superseded`.
+
+---
+
+## POST /api/plans/:id/dismiss
+
+Care team rejects a `suggested` plan. The approved plan stays in force. The rules engine won't re-suggest from the sessions it already used (see [Plans](#plans)).
+
+**Request body** (optional)
+```json
+{ "dismissedBy": "Dr. Chen" }
+```
+
+**Response `200`** — the plan with `status: "dismissed"`, `dismissedAt`, `dismissedBy`.  
+**Response `404`** if the plan doesn't exist; **`409`** if it isn't `suggested`.
 
 ---
 

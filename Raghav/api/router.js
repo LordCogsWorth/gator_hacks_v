@@ -19,6 +19,9 @@ const {
   avgCompensation,
   EXERCISES,
   symmetryForExercise,
+  PHASE_TARGETS,
+  MAX_PHASE,
+  ALERT_COOLDOWN_HOURS,
 } = require('./rules');
 
 const router = express.Router();
@@ -126,6 +129,16 @@ function latestSymmetrySummary(patientId, sessions, results) {
 /** GET /health — quick liveness check */
 router.get('/health', wrap((_req, res) => {
   res.json({ ok: true, service: 'rehabtrack-api' });
+}));
+
+/** GET /config — rule constants the dashboard draws (phase targets, etc.) */
+router.get('/config', wrap((_req, res) => {
+  res.json({
+    phaseTargets: PHASE_TARGETS,
+    maxPhase: MAX_PHASE,
+    exercises: EXERCISES,
+    alertCooldownHours: ALERT_COOLDOWN_HOURS,
+  });
 }));
 
 /**
@@ -424,6 +437,30 @@ router.post('/plans/:id/approve', wrap((req, res) => {
   }
 
   res.json(plan);
+}));
+
+/**
+ * POST /plans/:id/dismiss — care team rejects a suggested plan
+ * Body (optional): { dismissedBy }
+ */
+router.post('/plans/:id/dismiss', wrap((req, res) => {
+  const plans = store.readAll('plans');
+  const index = plans.findIndex((p) => p.id === req.params.id);
+  if (index < 0) {
+    return res.status(404).json({ error: 'Plan not found' });
+  }
+  if (plans[index].status !== 'suggested') {
+    return res.status(409).json({ error: `Only suggested plans can be dismissed (this one is ${plans[index].status})` });
+  }
+  const dismissedBy = req.body && typeof req.body.dismissedBy === 'string' ? req.body.dismissedBy : null;
+  plans[index] = {
+    ...plans[index],
+    status: 'dismissed',
+    dismissedAt: new Date().toISOString(),
+    dismissedBy,
+  };
+  store.writeAll('plans', plans);
+  res.json(plans[index]);
 }));
 
 // ---------------------------------------------------------------------------

@@ -211,3 +211,27 @@ describe('POST /plans/:id/approve', () => {
     assert.equal(res.status, 409);
   });
 });
+
+describe('POST /plans/:id/dismiss and GET /config', () => {
+  beforeEach(() => {
+    store.writeAll('plans', [
+      { id: 'plan-s', patientId: 'p-test', phase: 2, exercises: [], sessionsPerWeek: 5, status: 'suggested', approvedBy: null, nextCheckin: '2026-10-30', createdAt: '2026-10-24T12:00:00.000Z' },
+    ]);
+  });
+
+  it('dismisses a suggested plan once', async () => {
+    let res = await post('/plans/plan-s/dismiss', { dismissedBy: 'Dr. Chen' });
+    assert.equal(res.status, 200);
+    const plan = await res.json();
+    assert.equal(plan.status, 'dismissed');
+    assert.ok(plan.dismissedAt);
+    res = await post('/plans/plan-s/dismiss', {});
+    assert.equal(res.status, 409);
+  });
+
+  it('exposes the phase targets', async () => {
+    const config = await (await fetch(`${base}/config`)).json();
+    assert.equal(config.phaseTargets['2'], 65);
+    assert.equal(config.maxPhase, 4);
+  });
+});

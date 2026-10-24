@@ -145,7 +145,7 @@ interface Plan {
 }
 ```
 
-The rules engine drafts `suggested` plans; only a clinician's approval makes one `approved` (the old one becomes `superseded`). The patient app should only ever show the approved plan.
+The rules engine drafts `suggested` plans; only a clinician's approval makes one `approved` (the old one becomes `superseded`), and the care team can reject one with `POST /api/plans/:id/dismiss` (→ `dismissed`). The patient app should only ever show the approved plan.
 
 ## 6. Watch daily data (iPhone Shortcut → Raghav's API)
 

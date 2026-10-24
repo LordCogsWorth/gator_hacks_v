@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getPatients } from '../api';
+import { usePolling } from '../usePolling';
 import type { PatientSummary } from '../types';
 import { ALERT_LABELS } from '../types';
 
@@ -32,29 +33,56 @@ export default function PatientList() {
   const [patients, setPatients] = useState<PatientSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Rows whose open-alert count just went up; flashed for a few seconds.
+  const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
+  const lastCounts = useRef<Map<string, number> | null>(null);
+  const flashTimer = useRef<number | undefined>(undefined);
+
+  const load = useCallback(async () => {
+    const data = await getPatients();
+    const prev = lastCounts.current;
+    // Skip the very first load: nothing has "gone up" yet.
+    if (prev) {
+      const risen = data.filter((p) => p.openAlertCount > (prev.get(p.id) ?? 0)).map((p) => p.id);
+      if (risen.length > 0) {
+        setFlashIds(new Set(risen));
+        window.clearTimeout(flashTimer.current);
+        flashTimer.current = window.setTimeout(() => setFlashIds(new Set()), 4000);
+      }
+    }
+    lastCounts.current = new Map(data.map((p) => [p.id, p.openAlertCount]));
+    setPatients(data);
+    setError(null);
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
     (async () => {
       try {
-        const data = await getPatients();
-        if (!cancelled) setPatients(data);
+        await load();
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load patients');
+        setError(e instanceof Error ? e.message : 'Failed to load patients');
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => window.clearTimeout(flashTimer.current);
+  }, [load]);
+
+  // Refresh every 5s (paused while the tab is hidden).
+  usePolling(async () => {
+    try {
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load patients');
+    }
+  });
 
   if (loading) {
     return <p className="text-lg text-slate-600">Loading patients…</p>;
   }
 
-  if (error) {
+  // Only replace the table with the error if we never loaded anything.
+  if (error && patients.length === 0) {
     return (
       <div className="rounded-lg border border-amber-300 bg-alert-soft px-5 py-4 text-lg">
         <p className="font-semibold text-alert">Could not reach the API</p>
@@ -78,6 +106,9 @@ export default function PatientList() {
             ? `${flagged} flagged for care team review · sorted with alerts first`
             : 'No open alerts · all patients on track'}
         </p>
+        <p className="mt-1 text-sm text-slate-500">
+          {error ? `Can't reach the API (${error}) — retrying…` : 'Live · refreshes every 5 seconds'}
+        </p>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-foam bg-white shadow-sm">
@@ -98,7 +129,7 @@ export default function PatientList() {
                 key={p.id}
                 className={`border-t border-foam transition hover:bg-teal-soft/40 ${
                   p.flagged ? 'bg-alert-soft/40' : ''
-                }`}
+                } ${flashIds.has(p.id) ? 'row-flash' : ''}`}
               >
                 <td className="px-4 py-4">
                   <Link

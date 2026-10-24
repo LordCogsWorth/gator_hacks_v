@@ -5,7 +5,10 @@
 
 import type {
   Alert,
+  ApiConfig,
+  ApprovePlanBody,
   PatientDetailResponse,
+  Plan,
   PatientSummary,
   Session,
   WatchDaily,
@@ -15,8 +18,8 @@ const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || 'http://lo
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
     ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
   });
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
@@ -56,6 +59,29 @@ export function acknowledgeAlert(id: string) {
     method: 'PATCH',
     body: JSON.stringify({ acknowledged: true }),
   });
+}
+
+export function approvePlan(id: string, body: ApprovePlanBody) {
+  return request<Plan>(`/plans/${id}/approve`, { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function dismissPlan(id: string, dismissedBy?: string) {
+  return request<Plan>(`/plans/${id}/dismiss`, {
+    method: 'POST',
+    body: JSON.stringify({ dismissedBy }),
+  });
+}
+
+// Rule constants rarely change, so fetch them once per page load.
+let configPromise: Promise<ApiConfig> | null = null;
+export function getConfig() {
+  if (!configPromise) {
+    configPromise = request<ApiConfig>('/config').catch((e) => {
+      configPromise = null; // let the next caller retry
+      throw e;
+    });
+  }
+  return configPromise;
 }
 
 export { BASE as API_BASE };

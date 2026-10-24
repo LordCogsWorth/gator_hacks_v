@@ -3,7 +3,8 @@
 export type Exercise = 'arm_raise' | 'forward_reach' | 'hand_open';
 export type Side = 'weak' | 'healthy';
 export type BodySide = 'left' | 'right';
-export type PlanStatus = 'suggested' | 'approved';
+export type PlanStatus = 'suggested' | 'approved' | 'superseded' | 'dismissed';
+export type PlanKind = 'phase-up' | 'plateau' | 'compensation';
 export type Trend = 'up' | 'down' | 'flat' | 'none';
 
 export type AlertType =
@@ -54,6 +55,29 @@ export interface Plan {
   approvedBy: string | null;
   nextCheckin: string;
   createdAt: string;
+  approvedAt?: string;
+  dismissedAt?: string;
+  supersededAt?: string;
+  /** Only on plans drafted by the rules engine. */
+  kind?: PlanKind;
+  reason?: string;
+  basedOn?: { sessions: number; avgSymmetry: number | null; avgCompensation: number | null };
+}
+
+/** Body for POST /plans/:id/approve. Everything but approvedBy is optional. */
+export interface ApprovePlanBody {
+  approvedBy: string;
+  exercises?: PlanExercise[];
+  sessionsPerWeek?: number;
+  nextCheckin?: string;
+}
+
+/** GET /config */
+export interface ApiConfig {
+  phaseTargets: Record<string, number>;
+  maxPhase: number;
+  exercises: Exercise[];
+  alertCooldownHours: number;
 }
 
 export interface ExerciseResult {
@@ -110,6 +134,7 @@ export interface Alert {
   detail: string;
   createdAt: string;
   acknowledged: boolean;
+  acknowledgedAt?: string;
 }
 
 export interface PatientDetailResponse {
@@ -123,6 +148,19 @@ export const EXERCISE_LABELS: Record<Exercise, string> = {
   arm_raise: 'Arm raise',
   forward_reach: 'Forward reach',
   hand_open: 'Hand open',
+};
+
+export const PLAN_KIND_LABELS: Record<PlanKind, string> = {
+  'phase-up': 'Ready for next phase',
+  plateau: 'Plateau — shift emphasis',
+  compensation: 'Compensating — focus on form',
+};
+
+/** Unit shown after a plan target. */
+export const TARGET_UNITS: Record<Exercise, string> = {
+  arm_raise: '°',
+  forward_reach: '°',
+  hand_open: '%',
 };
 
 export const ALERT_LABELS: Record<AlertType, string> = {
