@@ -1,0 +1,5 @@
+*.task binary
+*.wasm binary
+*.sql text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf

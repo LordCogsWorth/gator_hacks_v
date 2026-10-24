@@ -1,0 +1,14 @@
+// Copy to Config.xcconfig (git-ignored) and fill in. Read by project.yml (XcodeGen)
+// and injected into Info.plist (SupabaseURL / SupabaseAnonKey / PatientID).
+//
+// xcconfig treats "//" as a comment, so write the URL as https:/$()/<host>
+// (the empty $() stops "//" being read as a comment).
+SUPABASE_URL = https:/$()/YOUR-PROJECT-REF.supabase.co
+// Supabase -> Project Settings -> API -> anon public key. Never the service_role key.
+SUPABASE_ANON_KEY = YOUR-SUPABASE-ANON-KEY
+// Demo patient this watch uploads for (p-maria / p-james / p-priya).
+PATIENT_ID = p-james
+// Your Apple developer team id (Xcode -> Settings -> Accounts). Leave empty to pick in Xcode.
+DEVELOPMENT_TEAM =
+// Reverse-DNS prefix for the bundle id: <prefix>.RehabTrackWatch
+BUNDLE_PREFIX = com.example

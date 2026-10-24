@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-density="comfortable">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="RehabTrack: home arm rehab after stroke, with the care team in the loop." />
+    <meta name="color-scheme" content="light dark" />
+    <title>RehabTrack</title>
+    <!--
+      Pre-paint theme + density (no flash). Must match src/ui/theme.ts:
+      /patient and /patient/* → stored rehabtrack.theme.patient or 'dark', density 'large';
+      everything else → stored rehabtrack.theme.care or 'light', density 'comfortable'.
+      Fonts are bundled (@fontsource): no Google Fonts link, so the app works offline.
+    -->
+    <script>
+      (function () {
+        var d = document.documentElement;
+        var patient = /^\/patient(\/|$)/.test(location.pathname);
+        var area = patient ? 'patient' : 'care';
+        var t = null;
+        try {
+          t = localStorage.getItem('rehabtrack.theme.' + area);
+        } catch (e) {}
+        if (t !== 'light' && t !== 'dark') t = patient ? 'dark' : 'light';
+        d.setAttribute('data-theme', t);
+        d.setAttribute('data-density', patient ? 'large' : 'comfortable');
+        d.style.colorScheme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

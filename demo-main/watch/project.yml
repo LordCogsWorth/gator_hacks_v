@@ -1,0 +1,42 @@
+# XcodeGen spec — run `xcodegen` in this folder to create MobilityWatch.xcodeproj
+# First: cp Config.example.xcconfig Config.xcconfig and fill it in (Config.xcconfig is git-ignored).
+name: MobilityWatch
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    watchOS: "10.0"
+configFiles:
+  Debug: Config.xcconfig
+  Release: Config.xcconfig
+targets:
+  MobilityWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - MobilityWatch
+    entitlements:
+      path: MobilityWatch/MobilityWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+    info:
+      path: MobilityWatch/Info.plist
+      properties:
+        CFBundleDisplayName: RehabTrack
+        WKApplication: true
+        WKWatchOnly: true
+        UIBackgroundModes: [workout-processing]
+        NSHealthShareUsageDescription: Reads heart rate during exercise sessions.
+        NSHealthUpdateUsageDescription: Saves exercise sessions as workouts.
+        NSMotionUsageDescription: Tracks your arm angle and direction during exercises.
+        SupabaseURL: $(SUPABASE_URL)
+        SupabaseAnonKey: $(SUPABASE_ANON_KEY)
+        PatientID: $(PATIENT_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_PREFIX).RehabTrackWatch
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: $(DEVELOPMENT_TEAM)
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "4"

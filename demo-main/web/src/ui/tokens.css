@@ -1,0 +1,96 @@
+/*
+ * RehabTrack design tokens (CONVERGENCE_PLAN §8). FROZEN after WP0: request changes via WP8.
+ *
+ * - Colours are RGB triplets so Tailwind can add alpha: `rgb(var(--primary) / <alpha-value>)`.
+ *   Use them through Tailwind (bg-surface, text-text-muted, border-border, bg-primary/10 …),
+ *   or in CSS as `rgb(var(--x))`. Charts read them with ui/chartTheme.ts → useChartTheme().
+ * - <html data-theme="light|dark" data-density="comfortable|large"> is set before first paint by
+ *   the inline script in index.html and kept in sync by ui/theme.ts.
+ * - Never use raw Tailwind palette colours (slate-400, neutral-500 …) for text: they fail contrast
+ *   in one of the two themes.
+ */
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: 241 245 249;            /* #F1F5F9 · page background */
+  --surface: 255 255 255;       /* #FFFFFF · cards */
+  --surface-2: 248 250 252;     /* #F8FAFC · insets, table header, bar track */
+  --border: 226 232 240;        /* #E2E8F0 · hairlines */
+  --text: 15 23 42;             /* #0F172A · body text */
+  --text-muted: 71 85 105;      /* #475569 · secondary text (7.6:1) — never lighter */
+  --primary: 15 118 110;        /* #0F766E · brand teal, primary buttons, bar fill */
+  --primary-ink: 255 255 255;   /* #FFFFFF · text on primary */
+  --primary-hover: 17 94 89;    /* #115E59 */
+  --primary-soft: 204 251 241;  /* #CCFBF1 · selected rows, chips */
+  --danger: 185 28 28;          /* #B91C1C · 911, stop, setback */
+  --danger-ink: 255 255 255;    /* #FFFFFF · text on danger */
+  --danger-soft: 254 226 226;   /* #FEE2E2 */
+  --warning: 180 83 9;          /* #B45309 · compensation, "sit back" banner */
+  --warning-soft: 255 237 213;  /* #FFEDD5 */
+  --success: 21 128 61;         /* #15803D · up-trend, saved */
+  --success-soft: 220 252 231;  /* #DCFCE7 · added by WP0: success banner/badge background */
+  --info: 3 105 161;            /* #0369A1 · info banners, watch series */
+  --info-soft: 224 242 254;     /* #E0F2FE · added by WP0: info banner/badge background */
+  --focus: 3 105 161;           /* #0369A1 · 4px focus ring, 3px offset */
+  --chart-1: 15 118 110;        /* #0F766E · arm raise */
+  --chart-2: 3 105 161;         /* #0369A1 · forward reach */
+  --chart-3: 180 83 9;          /* #B45309 · hand open */
+  --chart-grid: 226 232 240;    /* #E2E8F0 */
+  --chart-target: 185 28 28;    /* #B91C1C · dashed target / limit lines */
+  --row-flash: 253 230 138;     /* #FDE68A · patient-list flash */
+  --overlay: 15 23 42;          /* #0F172A · added by WP0: modal backdrop, use with alpha (bg-overlay/60) */
+  --shadow: 15 23 42;           /* added by WP0: shadow colour, use with alpha */
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: 11 15 20;               /* #0B0F14 */
+  --surface: 18 24 33;          /* #121821 */
+  --surface-2: 26 34 48;        /* #1A2230 */
+  --border: 42 52 67;           /* #2A3443 */
+  --text: 241 245 249;          /* #F1F5F9 */
+  --text-muted: 168 179 194;    /* #A8B3C2 (≈8:1) */
+  --primary: 45 212 191;        /* #2DD4BF */
+  --primary-ink: 4 32 29;       /* #04201D */
+  --primary-hover: 94 234 212;  /* #5EEAD4 */
+  --primary-soft: 14 59 55;     /* #0E3B37 */
+  --danger: 248 113 113;        /* #F87171 */
+  --danger-ink: 31 6 6;         /* #1F0606 */
+  --danger-soft: 59 20 20;      /* #3B1414 */
+  --warning: 251 191 36;        /* #FBBF24 */
+  --warning-soft: 58 42 10;     /* #3A2A0A */
+  --success: 74 222 128;        /* #4ADE80 */
+  --success-soft: 13 46 26;     /* #0D2E1A */
+  --info: 56 189 248;           /* #38BDF8 */
+  --info-soft: 11 42 61;        /* #0B2A3D */
+  --focus: 253 230 138;         /* #FDE68A */
+  --chart-1: 45 212 191;        /* #2DD4BF */
+  --chart-2: 56 189 248;        /* #38BDF8 */
+  --chart-3: 251 191 36;        /* #FBBF24 */
+  --chart-grid: 39 49 66;       /* #273142 */
+  --chart-target: 248 113 113;  /* #F87171 */
+  --row-flash: 91 74 18;        /* #5B4A12 */
+  --overlay: 0 0 0;             /* #000000 */
+  --shadow: 0 0 0;
+}
+
+/*
+ * Density. comfortable = care (16 px root, 44 px tap targets); large = patient (18 px root, 64 px tap
+ * targets). Every rem-based Tailwind size scales with the root font size; `min-h-tap` / `min-w-tap` /
+ * `h-tap` read --tap.
+ */
+:root,
+:root[data-density='comfortable'] {
+  font-size: 16px;
+  --tap: 44px;
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+}
+
+:root[data-density='large'] {
+  font-size: 18px;
+  --tap: 64px;
+  --radius-card: 1.25rem;
+  --radius-control: 0.875rem;
+}

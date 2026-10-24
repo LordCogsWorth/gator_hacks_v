@@ -1,0 +1,21 @@
+# Minimal Supabase CLI config. Run CLI commands from demo-main/ (the folder that contains supabase/).
+# project_id is only a local label; `supabase link --project-ref <ref>` connects the real project.
+project_id = "rehabtrack-demo"
+
+[api]
+schemas = ["public"]
+
+[db]
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[storage]
+file_size_limit = "2MiB"
+
+[functions.weekly-summary]
+# supabase-js functions.invoke sends the anon JWT. If the project only has the new
+# publishable (sb_publishable_...) keys, deploy with --no-verify-jwt instead.
+verify_jwt = true

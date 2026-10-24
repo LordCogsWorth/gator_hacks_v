@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles on the design tokens (ui/tokens.css). Theme + density live on <html>. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: rgb(var(--bg));
+    color: rgb(var(--text));
+    font-family: 'Source Sans 3', 'Segoe UI', Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: 'IBM Plex Sans', 'Segoe UI', Helvetica, Arial, sans-serif;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  /* Numbers line up in tables, stat tiles and charts. */
+  table,
+  output,
+  .recharts-wrapper {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Visible focus everywhere: 4 px ring, 3 px offset, token colour (yellow on dark, blue on light). */
+  :focus-visible {
+    outline: 4px solid rgb(var(--focus));
+    outline-offset: 3px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background-color: rgb(var(--primary) / 0.25);
+  }
+}
+
+/* Patient list: a row whose open-alert count just went up (also available as `animate-row-flash`). */
+@keyframes row-flash {
+  0%,
+  40% {
+    background-color: rgb(var(--row-flash));
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.row-flash {
+  animation: row-flash 4s ease-out;
+}
+
+/* Respect reduced motion: coach animations, row flash, spinners and transitions settle immediately. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
