@@ -21,7 +21,7 @@ export function SafetyStop() {
 
   // Still save the check-in so the care team gets the pain / dizziness alert.
   useEffect(() => {
-    if (saved.current) return;
+    if (saved.current || session.pain === null) return;
     saved.current = true;
     saveSession(
       {

@@ -38,7 +38,9 @@ export function ProgressChart() {
   const change = first && last ? last.value - first.value : 0;
   const up = change >= 0;
   const label = view === 'average' ? 'All exercises' : EXERCISES[view].title;
-  const yMin = Math.max(0, Math.floor((Math.min(...points.map((p) => p.value), 100) - 10) / 10) * 10);
+  const values = points.map((p) => p.value);
+  const yMin = Math.max(0, Math.floor((Math.min(...values, 100) - 10) / 10) * 10);
+  const yMax = Math.ceil(Math.max(...values, 100) / 10) * 10;
 
   const views: View[] = ['average', ...getCurrentPlan().exercises.map((e) => e.name)];
 
@@ -94,8 +96,8 @@ export function ProgressChart() {
                   minTickGap={24}
                 />
                 <YAxis
-                  domain={[yMin, 100]}
-                  ticks={Array.from({ length: (100 - yMin) / 10 + 1 }, (_, i) => yMin + i * 10)}
+                  domain={[yMin, yMax]}
+                  ticks={Array.from({ length: (yMax - yMin) / 10 + 1 }, (_, i) => yMin + i * 10)}
                   tick={{ fill: INK_2, fontSize: 16 }}
                   tickLine={false}
                   axisLine={false}

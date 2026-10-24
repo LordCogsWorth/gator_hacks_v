@@ -21,7 +21,8 @@ export function Dashboard() {
   const summaries = getSessionSummaries();
 
   const today = new Date().toDateString();
-  const doneToday = sessions.some((s) => new Date(s.started_at).toDateString() === today);
+  // A session stopped for pain or dizziness doesn't count as done.
+  const doneToday = summaries.some((s) => s.average !== null && new Date(s.session.started_at).toDateString() === today);
   const thisWeek = sessions.filter((s) => Date.now() - new Date(s.started_at).getTime() < WEEK_MS).length;
   const checkin = daysUntil(plan.next_checkin);
   const scored = summaries.filter((s) => s.average !== null);

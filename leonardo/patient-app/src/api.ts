@@ -117,11 +117,30 @@ export function getResults(): ExerciseResult[] {
   return [...fakeResults, ...readLocal<ExerciseResult>(RESULTS_KEY)];
 }
 
+/** Saves (or re-saves) a session and its results. Rejects if the numbers couldn't be stored. */
 export async function saveSession(session: Session, results: ExerciseResult[], replay: Joint3D[][]): Promise<void> {
-  writeLocal(SESSIONS_KEY, [...readLocal<Session>(SESSIONS_KEY), session]);
-  writeLocal(RESULTS_KEY, [...readLocal<ExerciseResult>(RESULTS_KEY), ...results]);
-  // Replay can be large; it goes to Supabase Storage later. Locally, skip it if it doesn't fit.
-  if (replay.length) writeLocal(REPLAY_KEY(session.id), replay);
+  // Replays are large (a few MB) and browser storage holds ~5 MB, so only the latest one is kept
+  // locally — and old ones are dropped first so they can never crowd out the session numbers.
+  // In the real app the replay goes to Supabase Storage.
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith('rehabtrack.replay.'))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // Storage unavailable; the writes below will report it.
+  }
+
+  // Replace any earlier copy of this session, so visiting the summary twice doesn't duplicate it.
+  const ok =
+    writeLocal(SESSIONS_KEY, [...readLocal<Session>(SESSIONS_KEY).filter((s) => s.id !== session.id), session]) &&
+    writeLocal(RESULTS_KEY, [...readLocal<ExerciseResult>(RESULTS_KEY).filter((r) => r.session_id !== session.id), ...results]);
+  if (!ok) throw new Error('Could not save the session on this device');
+  changed();
+
+  if (replay.length) {
+    const r4 = (n: number) => Math.round(n * 1e4) / 1e4;
+    writeLocal(REPLAY_KEY(session.id), replay.map((frame) => frame.map((j) => [r4(j.x), r4(j.y), r4(j.z), r4(j.visibility)])));
+  }
 }
 
 /** Weak arm best ÷ healthy arm best × 100 for one exercise in one session. */

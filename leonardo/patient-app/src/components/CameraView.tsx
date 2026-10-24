@@ -26,7 +26,10 @@ export function CameraView({ onFrame, outline = false }: { onFrame?: (f: Trackin
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: false });
-        if (cancelled || !video.current) return;
+        if (cancelled || !video.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         video.current.srcObject = stream;
         await video.current.play();
       } catch {

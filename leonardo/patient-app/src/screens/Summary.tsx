@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { getCurrentPlan, getPatient, getResults, getSessions, saveSession, streakDays, symmetryFor } from '../api';
 import { BigButton } from '../components/Layout';
 import { EXERCISES } from '../data/exercises';
@@ -15,6 +15,8 @@ export function Summary() {
   const plan = getCurrentPlan();
   const [saved, setSaved] = useState<'saving' | 'saved' | 'failed'>('saving');
   const savedOnce = useRef(false);
+  // Opened without doing a session (e.g. after a page refresh): nothing to show or save.
+  const empty = session.pain === null && session.results.length === 0;
 
   // Compare with the most recent session from about a week ago (before today's is saved).
   const lines = useMemo(() => {
@@ -29,7 +31,7 @@ export function Summary() {
   }, [plan, session.results, session.sessionId]);
 
   useEffect(() => {
-    if (savedOnce.current) return;
+    if (savedOnce.current || empty) return;
     savedOnce.current = true;
     saveSession(
       {
@@ -52,6 +54,7 @@ export function Summary() {
   }, []); // run once when the summary opens
 
   const streak = saved === 'saved' ? streakDays(getSessions()) : null;
+  if (empty) return <Navigate to="/patient" replace />;
 
   return (
     <div className="space-y-6">
@@ -74,7 +77,7 @@ export function Summary() {
       <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-neutral-900 p-5 text-2xl">
         {streak !== null && <span className="font-semibold">{streak} days in a row</span>}
         <span className="text-neutral-300">
-          {saved === 'saving' ? 'Saving…' : saved === 'saved' ? '✓ Sent to your care team' : 'Could not save — will retry'}
+          {saved === 'saving' ? 'Saving…' : saved === 'saved' ? '✓ Sent to your care team' : 'Could not save on this device. Please tell your care team.'}
         </span>
       </div>
 

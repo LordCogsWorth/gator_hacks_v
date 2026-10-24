@@ -52,6 +52,8 @@ export function SessionRun() {
   // Per-round mutable state, read from the 30 fps frame callback.
   const round = useRef({ counter: new RepCounter(info.restAt, info.upAt), recent: [] as number[], started: 0, lastWarn: 0, lastSeenHand: 0, seenSince: 0 });
   const lastReplay = useRef(0);
+  const readyTimer = useRef<number>();
+  useEffect(() => () => window.clearTimeout(readyTimer.current), []);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
@@ -130,11 +132,15 @@ export function SessionRun() {
         r.seenSince = Infinity; // only fire once
         setBodySeen(true);
         speak('Ready');
-        window.setTimeout(() => setPhase('countdown'), 1500);
+        readyTimer.current = window.setTimeout(() => setPhase('countdown'), 1500);
       }
       return;
     }
     if (phaseRef.current !== 'active') return;
+    if (now - r.started > ROUND_TIMEOUT_MS) {
+      setPhase('done');
+      return;
+    }
 
     const raw = info.read(f, side);
     if (raw === null) {
@@ -170,7 +176,6 @@ export function SessionRun() {
       speak(String(n));
       if (n >= planEx.reps) setPhase('done');
     }
-    if (now - r.started > ROUND_TIMEOUT_MS) setPhase('done');
   }
 
   const roundLabel = step.role === 'healthy' ? `Stronger arm (${side})` : `Weaker arm (${side})`;

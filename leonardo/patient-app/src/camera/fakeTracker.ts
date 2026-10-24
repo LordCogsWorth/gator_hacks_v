@@ -58,6 +58,7 @@ export function createFakeTracker(weakSide: Side): CameraTracker {
 
   return {
     async start() {
+      window.clearInterval(timer);
       startedAt = performance.now();
       configuredAt = startedAt;
       timer = window.setInterval(() => {
