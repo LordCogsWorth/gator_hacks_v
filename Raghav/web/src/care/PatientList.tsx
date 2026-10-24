@@ -133,7 +133,7 @@ export default function PatientList() {
               >
                 <td className="px-4 py-4">
                   <Link
-                    to={`/patients/${p.id}`}
+                    to={`/care/patients/${p.id}`}
                     className="text-lg font-semibold text-teal-deep underline-offset-2 hover:underline"
                   >
                     {p.name}

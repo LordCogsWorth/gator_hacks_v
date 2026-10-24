@@ -18,7 +18,7 @@ import {
   getPatientSessions,
   getPatientWatch,
 } from '../api';
-import { CurrentPlanCard, SuggestedPlanCard } from '../components/PlanCards';
+import { CurrentPlanCard, SuggestedPlanCard } from './PlanCards';
 import { usePolling } from '../usePolling';
 import type { Alert, ApiConfig, PatientDetailResponse, Session, WatchDaily } from '../types';
 import { ALERT_LABELS, EXERCISE_LABELS, type Exercise } from '../types';
@@ -145,7 +145,7 @@ export default function PatientDetail() {
     return (
       <div className="rounded-lg border border-amber-300 bg-alert-soft px-5 py-4 text-lg">
         <p className="font-semibold text-alert">{error}</p>
-        <Link to="/" className="mt-2 inline-block text-teal-deep underline">
+        <Link to="/care" className="mt-2 inline-block text-teal-deep underline">
           Back to patients
         </Link>
       </div>
@@ -189,7 +189,7 @@ export default function PatientDetail() {
   return (
     <div className="space-y-8">
       <div>
-        <Link to="/" className="text-base text-teal-deep hover:underline">
+        <Link to="/care" className="text-base text-teal-deep hover:underline">
           ← All patients
         </Link>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">

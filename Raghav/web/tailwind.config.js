@@ -4,6 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Shared brand tokens (care + patient headers; see src/Brand.tsx).
+        brand: {
+          DEFAULT: '#0f766e', // accent: logo mark background
+          ink: '#ffffff', // logo mark foreground
+        },
         // Clinical, calm palette — slate + teal accent (not purple)
         ink: '#0f172a',
         mist: '#f1f5f9',
@@ -19,6 +24,7 @@ export default {
         },
       },
       fontFamily: {
+        brand: ['"IBM Plex Sans"', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif'],
         sans: ['"Source Sans 3"', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif'],
         display: ['"IBM Plex Sans"', 'Segoe UI', 'Helvetica', 'Arial', 'sans-serif'],
       },
