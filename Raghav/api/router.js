@@ -97,7 +97,7 @@ function latestSymmetrySummary(patientId, sessions, results) {
   const mine = sessions
     .filter((s) => s.patientId === patientId)
     .slice()
-    .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
 
   if (mine.length === 0) {
     return { latestSymmetry: null, trend: 'none', trendDelta: 0 };
@@ -218,7 +218,7 @@ router.get('/patients/:id/sessions', wrap((req, res) => {
     .readAll('sessions')
     .filter((s) => s.patientId === patient.id)
     .slice()
-    .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)))
     .map((s) => {
       const results = resultsForSession(s.id, allResults);
       return {

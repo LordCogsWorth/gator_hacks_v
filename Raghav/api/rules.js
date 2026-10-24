@@ -92,7 +92,7 @@ function sessionTimeline(patientId, sessions, allResults) {
   const mine = sessions
     .filter((s) => s.patientId === patientId)
     .slice()
-    .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
 
   return mine.map((session) => {
     const results = allResults.filter((r) => r.sessionId === session.id);
