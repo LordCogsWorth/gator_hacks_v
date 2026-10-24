@@ -1,8 +1,10 @@
 /** Shared data shapes — keep in sync with Raghav/docs/CONTRACTS.md and the API. */
 
-export type Exercise = 'arm_raise' | 'forward_reach' | 'hand_open';
-export type Side = 'weak' | 'healthy';
-export type BodySide = 'left' | 'right';
+import type { BodySide, Exercise, ExerciseResult as CameraExerciseResult } from './camera/types';
+
+// Camera-contract names live in camera/types.ts (CONTRACTS.md §1–4); re-exported here.
+export type { BodySide, Exercise, ReplayFile, Side } from './camera/types';
+
 export type PlanStatus = 'suggested' | 'approved' | 'superseded' | 'dismissed';
 export type PlanKind = 'phase-up' | 'plateau' | 'compensation';
 export type Trend = 'up' | 'down' | 'flat' | 'none';
@@ -80,19 +82,10 @@ export interface ApiConfig {
   alertCooldownHours: number;
 }
 
-export interface ExerciseResult {
+/** An ExerciseResult as the API returns it (ids filled in once saved). */
+export interface ExerciseResult extends CameraExerciseResult {
   id?: string;
   sessionId?: string;
-  exercise: Exercise;
-  side: Side;
-  bestValue: number;
-  reps: number;
-  secPerRep: number;
-  smoothness: number;
-  fatigue: number;
-  trunkLeanMax: number;
-  shoulderHikeMax: number;
-  compRepPct: number;
 }
 
 export interface Session {
