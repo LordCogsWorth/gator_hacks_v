@@ -60,6 +60,11 @@ async function run() {
       throw new Error('Valid ingest failed');
     }
 
+    const latest = await request({ method: 'GET', path: '/latest', port });
+    if (latest.status !== 200 || latest.body?.latest?.source !== "Kyle's Apple Watch") {
+      throw new Error('Latest sample endpoint failed');
+    }
+
     const invalidSample = {
       ...validSample,
       source: 'Wrong Watch Name'

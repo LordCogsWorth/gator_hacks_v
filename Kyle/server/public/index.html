@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kyle Mobility Lab</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      :root { color-scheme: dark; --bg:#0f172a; --border:#1f2937; --muted:#9ca3af; --text:#e5e7eb; --ok:#22c55e; --mid:#f59e0b; --bad:#ef4444; --accent:#38bdf8; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: Inter, system-ui, -apple-system, sans-serif; background: radial-gradient(circle at top,#1e293b,var(--bg)); color:var(--text); }
+      .wrap { max-width: 1600px; margin: 0 auto; padding: 16px; }
+      header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+      h1 { margin:0; font-size:24px; }
+      .sub { color:var(--muted); font-size:13px; }
+      .mono { font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+      .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+      .big { font-size:44px; font-weight:800; line-height:1.05; }
+      .card { background:rgba(17,24,39,.92); border:1px solid var(--border); border-radius:14px; padding:12px; }
+      .row { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+      .main { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:12px; }
+      .bottom { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-top:12px; }
+      @media (max-width: 1000px) { .main, .bottom { grid-template-columns: 1fr; } }
+      .stage, #three { position:relative; width:100%; aspect-ratio:4/3; margin-top:8px; background:#020617; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      .stage video, .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+      #three canvas { display:block; width:100%; height:100%; }
+      .banner { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3; width:min(90%,460px); text-align:center; background:rgba(2,6,23,.88); border:1px solid #334155; border-radius:14px; padding:14px; }
+      .scores { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+      .score { border:1px solid var(--border); border-radius:10px; padding:10px; }
+      .bar { height:10px; background:#1f2937; border-radius:999px; overflow:hidden; margin-top:6px; }
+      .bar > div { height:100%; width:0%; background:var(--ok); transition: width .15s; }
+      .toolbar { position:absolute; top:8px; left:8px; z-index:2; display:flex; gap:6px; flex-wrap:wrap; }
+      .legend { position:absolute; bottom:8px; left:8px; z-index:2; display:flex; gap:10px; flex-wrap:wrap; font-size:11px; background:rgba(2,6,23,.8); padding:5px 8px; border-radius:8px; }
+      .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+      .info { position:absolute; right:8px; bottom:8px; z-index:2; width:min(60%,300px); background:rgba(2,6,23,.92); border:1px solid #334155; border-radius:10px; padding:10px; font-size:13px; }
+      button, input { background:#0b1220; color:var(--text); border:1px solid #334155; border-radius:8px; padding:6px 10px; font-size:13px; }
+      button { cursor:pointer; }
+      button.on { background:#0369a1; border-color:#0284c7; }
+      button.primary { background:#0369a1; border-color:#0284c7; font-size:16px; padding:10px 22px; font-weight:700; }
+      button:disabled { opacity:.5; cursor:default; }
+      table { width:100%; border-collapse:collapse; font-size:13px; }
+      td, th { padding:5px 4px; border-bottom:1px solid var(--border); text-align:left; }
+      th { color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; }
+      .pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; color:#020617; }
+      .ok { color:var(--ok); } .mid { color:var(--mid); } .bad { color:var(--bad); }
+      .stat { display:flex; justify-content:space-between; gap:8px; font-size:13px; padding:3px 0; }
+      canvas.spark { width:100%; height:60px; background:#020617; border:1px solid var(--border); border-radius:8px; margin-top:6px; }
+      #findings p { margin:4px 0; font-size:13px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>Kyle Mobility Lab</h1>
+          <div class="sub">Live camera pose tracking · 3D muscle model that follows you · live data from <strong>Kyle's Apple Watch</strong></div>
+        </div>
+        <div class="row">
+          <label class="sub">Height (cm) <input id="heightInput" type="number" min="100" max="250" placeholder="auto" style="width:80px" /></label>
+          <button id="analyzeBtn" class="primary">▶ Analyze</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+      </header>
+      <div id="status" class="sub mono" style="margin-top:6px">Click “Analyze”: it turns on the camera, starts tracking your body, reads your watch, then runs the arm-raise test.</div>
+
+      <div class="main">
+        <div class="card">
+          <div class="row"><span class="label">Live camera · pose tracking</span><span id="hud" class="mono sub">Pose model: not loaded</span></div>
+          <div class="stage">
+            <video id="video" playsinline muted autoplay></video>
+            <canvas id="overlay"></canvas>
+            <div id="testBanner" class="banner" style="display:none">
+              <div id="testPhase" class="label">Arm-raise test</div>
+              <div id="testBig" class="big">3</div>
+              <div id="testMsg" class="sub"></div>
+              <div class="bar"><div id="testBar"></div></div>
+            </div>
+          </div>
+          <div class="scores">
+            <div class="score">
+              <div class="label">Left arm raise · live</div>
+              <div id="armL" class="big">--%</div>
+              <div class="bar"><div id="armLBar"></div></div>
+              <div id="armLDeg" class="sub mono" style="margin-top:4px">--° of 180° · peak --</div>
+            </div>
+            <div class="score">
+              <div class="label">Right arm raise · live</div>
+              <div id="armR" class="big">--%</div>
+              <div class="bar"><div id="armRBar"></div></div>
+              <div id="armRDeg" class="sub mono" style="margin-top:4px">--° of 180° · peak --</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row"><span class="label">3D muscle model · follows your movement</span><span class="sub">drag to rotate · scroll to zoom · click a muscle</span></div>
+          <div id="three">
+            <div class="toolbar">
+              <button data-view="front">Front</button>
+              <button data-view="back">Back</button>
+              <button data-view="side">Side</button>
+              <button id="focusBtn">Focus affected</button>
+              <button id="labelsBtn">Labels</button>
+              <button id="skelBtn" class="on">Skeleton</button>
+              <button id="followBtn" class="on">Follow me</button>
+            </div>
+            <div class="legend">
+              <span><span class="dot" style="background:#ff2d2d"></span>Likely affected</span>
+              <span><span class="dot" style="background:#ff9f1c"></span>Possibly involved</span>
+              <span><span class="dot" style="background:#ffd166"></span>Minor</span>
+              <span><span class="dot" style="background:#22d3ee"></span>Working now</span>
+            </div>
+            <div id="info" class="info" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="result" class="card" style="display:none; margin-top:12px"></div>
+
+      <div class="bottom">
+        <div class="card">
+          <div class="row"><span class="label">Apple Watch · live</span><span id="wConn" class="mono sub">connecting…</span></div>
+          <div style="margin-top:6px"><span id="hr" class="big">--</span> <span class="sub">BPM</span></div>
+          <canvas id="hrChart" class="spark" width="400" height="60"></canvas>
+          <div class="stat"><span>Wrist speed</span><span id="wSpeed" class="mono">--</span></div>
+          <div class="stat"><span>Acceleration</span><span id="wAccel" class="mono">--</span></div>
+          <div class="stat"><span>Rotation</span><span id="wGyro" class="mono">--</span></div>
+          <div id="wExtra" class="mono sub"></div>
+        </div>
+        <div class="card">
+          <div class="label">Movement & body</div>
+          <div class="stat" style="margin-top:6px"><span>Arm speed (camera)</span><span id="camSpeed" class="mono">--</span></div>
+          <div class="stat"><span>Peak arm speed</span><span id="camPeak" class="mono">--</span></div>
+          <div class="stat"><span>Best arm raise</span><span id="armPeak" class="mono">--</span></div>
+          <div class="stat"><span>Height</span><span id="heightOut" class="mono">--</span></div>
+          <canvas id="accelChart" class="spark" width="400" height="60"></canvas>
+          <div class="sub">Watch acceleration (g)</div>
+        </div>
+        <div class="card">
+          <div class="label">Joint mobility (% of normal range of motion)</div>
+          <table style="margin-top:6px">
+            <thead><tr><th>Joint</th><th>Now</th><th>Peak</th><th>Mobility</th><th>Status</th></tr></thead>
+            <tbody id="jointTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="label">Weakness findings</div>
+        <div id="findings" style="margin-top:6px"><p class="sub">Click Analyze and raise both arms to find weak muscles.</p></div>
+        <p class="sub" style="margin-top:8px">Estimates from one camera — not a medical diagnosis.</p>
+      </div>
+    </div>
+
+    <script>
+      // Standalone camera starter: no dependencies, so the camera turns on
+      // even if the 3D / pose libraries are slow or fail to load.
+      (function () {
+        var btn = document.getElementById('analyzeBtn');
+        var status = document.getElementById('status');
+        var video = document.getElementById('video');
+        window.addEventListener('error', function (e) {
+          status.textContent = 'Page error: ' + (e.message || 'a script failed to load (' + (e.target && e.target.src) + ')');
+        }, true);
+        btn.addEventListener('click', async function () {
+          if (window.__camStream) {
+            if (window.__analyze) window.__analyze();
+            return;
+          }
+          if (!window.isSecureContext) {
+            status.textContent = 'Camera blocked: open http://localhost:8080 (not an IP address).';
+            return;
+          }
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            status.textContent = 'This window has no camera access. Open http://localhost:8080 in Safari or Chrome, not the VS Code preview.';
+            return;
+          }
+          status.textContent = 'Requesting camera… click Allow if your browser asks.';
+          try {
+            var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+            window.__camStream = stream;
+            video.srcObject = stream;
+            await video.play();
+            status.textContent = 'Camera on.';
+          } catch (err) {
+            var msg = err.name === 'NotAllowedError'
+              ? 'Camera permission denied. Safari: Settings → Websites → Camera → localhost → Allow. Also check System Settings → Privacy & Security → Camera.'
+              : err.name === 'NotFoundError'
+                ? 'No camera found on this Mac.'
+                : err.name === 'NotReadableError'
+                  ? 'Camera is in use by another app (FaceTime, Zoom, Photo Booth). Close it and try again.'
+                  : err.name + ': ' + err.message;
+            status.textContent = 'Camera error: ' + msg;
+            return;
+          }
+          if (window.__analyze) {
+            window.__analyze();
+          } else {
+            status.textContent = 'Camera on, but the analysis script did not load. Check your internet connection (it downloads the 3D and pose libraries), then refresh.';
+          }
+        });
+      })();
+    </script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
