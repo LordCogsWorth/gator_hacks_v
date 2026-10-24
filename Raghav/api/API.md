@@ -292,7 +292,7 @@ Upload a finished exercise session. The API saves it, runs the rules engine (ale
 }
 ```
 
-Send up to 6 results (3 exercises × 2 sides). You do **not** need to send `avgHr` or a replay here.
+Send up to 6 results (3 exercises × 2 sides). You do **not** need to send `avgHr` or a replay here. (`avgHr` is always `null` for now: filling it from watch data is not implemented yet.)
 
 **Validation** (checked before anything is saved — a rejected upload writes nothing):
 
@@ -534,9 +534,11 @@ Care team rejects a `suggested` plan. The approved plan stays in force. The rule
 
 | id | Story |
 | --- | --- |
-| `p-maria` | Improving symmetry, good adherence |
-| `p-james` | Plateau + missed sessions |
-| `p-priya` | High compensation + rising resting HR + high BP |
+| `p-maria` | Improving symmetry, good adherence → suggested plan: phase up |
+| `p-james` | Plateau + missed sessions → suggested plan: more hand-open reps |
+| `p-priya` | High compensation + rising resting HR + high BP → suggested plan: lighter load, focus on form |
+
+Seed dates are relative to today, so alerts and suggestions look the same whatever day you seed.
 
 ---
 
@@ -545,5 +547,5 @@ Care team rejects a `suggested` plan. The approved plan stays in force. The rule
 1. Ask Raghav to run the API (`cd Raghav/api && npm install && npm run seed && npm start`).
 2. Point your app at `http://localhost:8081/api` (or Raghav’s Wi‑Fi IP).
 3. On home screen: `GET /patients/p-maria/plan` (or whichever patient you are demoing).
-4. After a session: `POST /sessions` with the body shape above.
+4. After a session: `POST /sessions` with the body shape above (`Date.now()` is fine for `startedAt` / `endedAt`). On `400`, log `details`: it lists every bad field.
 5. Do not invent extra fields — stick to this file and `Raghav/docs/CONTRACTS.md`.

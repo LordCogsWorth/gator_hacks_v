@@ -107,6 +107,7 @@ Automatic: drafting a suggested plan, raising alerts, reminders, live form corre
 | fall | Any fall recorded |
 
 Suggest next phase when symmetry is above target in the last 3 sessions and compensation is under 20%.
+Also suggest a same-phase change on a plateau (more reps, easier target on the weakest exercise) or when compensation averages over 50% (fewer reps, lower targets, focus on form). Every suggestion carries a plain-language reason; a clinician approves or dismisses it. Exact rules: `Raghav/api/API.md` → Plans.
 
 ## 9. Architecture
 

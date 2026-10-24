@@ -117,7 +117,7 @@ Coordinates come from MediaPipe's world landmarks (`worldLandmarks`). Depth is e
 }
 ```
 
-Average heart rate for the session is filled in later from the watch data (matched by `startedAt` / `endedAt`), so the patient app doesn't need to send it.
+The patient app doesn't send average heart rate. Sessions have an `avgHr` field, but it is **not filled in yet** (always `null`); matching it from watch data by `startedAt` / `endedAt` is planned, not implemented.
 
 The API validates the whole body before saving anything and answers `400 { error, details: [{ field, message }] }` listing every problem (rules in `Raghav/api/API.md`). Every `ExerciseResult` number is required and must be finite; `compRepPct` is 0–100; `pain` 0–10 and `tiredness` 1–5 are optional; 1–6 results per session.
 
