@@ -7,14 +7,29 @@ import type {
   Alert,
   ApiConfig,
   ApprovePlanBody,
+  Exercise,
   PatientDetailResponse,
   Plan,
   PatientSummary,
+  ReplayFile,
+  ReplaySummary,
+  ReplayUploadResponse,
   Session,
+  SessionUploadBody,
+  SessionUploadResponse,
+  Side,
   WatchDaily,
 } from './types';
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) || 'http://localhost:8081/api';
+
+/** An error answer from the API, with its HTTP status. (Network failures stay plain fetch errors.) */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -29,7 +44,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* ignore */
     }
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -48,6 +63,35 @@ export function getPatientSessions(id: string) {
 
 export function getPatientWatch(id: string) {
   return request<WatchDaily[]>(`/patients/${id}/watch`);
+}
+
+/** Today's approved plan, or null when the care team hasn't approved one yet (404). */
+export async function getApprovedPlan(id: string): Promise<Plan | null> {
+  try {
+    return await request<Plan>(`/patients/${id}/plan`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404 && e.message.startsWith('No approved plan')) return null;
+    throw e;
+  }
+}
+
+export function postSession(body: SessionUploadBody) {
+  return request<SessionUploadResponse>('/sessions', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function uploadReplay(sessionId: string, replay: ReplayFile) {
+  return request<ReplayUploadResponse>(`/sessions/${sessionId}/replay`, {
+    method: 'POST',
+    body: JSON.stringify(replay),
+  });
+}
+
+export function getSessionReplays(sessionId: string) {
+  return request<ReplaySummary[]>(`/sessions/${sessionId}/replays`);
+}
+
+export function getSessionReplay(sessionId: string, exercise: Exercise, side: Side) {
+  return request<ReplayFile>(`/sessions/${sessionId}/replays/${exercise}/${side}`);
 }
 
 export function getOpenAlerts() {

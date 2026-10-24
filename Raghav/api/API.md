@@ -633,4 +633,5 @@ Seed dates are relative to today, so alerts and suggestions look the same whatev
 3. On home screen: `GET /patients/p-maria/plan` (or whichever patient you are demoing).
 4. After a session: `POST /sessions` with the body shape above (`Date.now()` is fine for `startedAt` / `endedAt`). On `400`, log `details`: it lists every bad field.
 5. Optional: for each exercise + side, `POST /sessions/:id/replay` with the camera module's `replay()` output.
-6. Do not invent extra fields — stick to this file and `Raghav/docs/CONTRACTS.md`.
+6. Working reference for steps 3–5: the dashboard's demo patient view (`Raghav/web/src/pages/PatientDemo.tsx`, open `http://localhost:5173/patient/p-maria`) driving the mock camera (`Raghav/web/src/camera/mockCamera.ts`).
+7. Do not invent extra fields — stick to this file and `Raghav/docs/CONTRACTS.md`.

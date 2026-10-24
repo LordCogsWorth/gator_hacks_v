@@ -1,6 +1,6 @@
 /** Shared data shapes — keep in sync with Raghav/docs/CONTRACTS.md and the API. */
 
-import type { BodySide, Exercise, ExerciseResult as CameraExerciseResult } from './camera/types';
+import type { BodySide, Exercise, ExerciseResult as CameraExerciseResult, Side } from './camera/types';
 
 // Camera-contract names live in camera/types.ts (CONTRACTS.md §1–4); re-exported here.
 export type { BodySide, Exercise, ReplayFile, Side } from './camera/types';
@@ -96,11 +96,51 @@ export interface Session {
   pain: number | null;
   tiredness: number | null;
   avgHr: number | null;
+  /** Legacy placeholder, always null. Uploaded replays are listed in `replays`. */
   replayFile: unknown | null;
+  /** Keys of uploaded replays: "<sessionId>-<exercise>-<side>". */
+  replays: string[];
   results: ExerciseResult[];
   symmetry: number | null;
   compensation: number | null;
   symmetryByExercise: Record<Exercise, number | null>;
+}
+
+/** Body for POST /sessions (what the patient app uploads). */
+export interface SessionUploadBody {
+  patientId: string;
+  startedAt: string | number;
+  endedAt: string | number;
+  pain?: number | null;
+  tiredness?: number | null;
+  results: CameraExerciseResult[];
+}
+
+/** Response of POST /sessions. */
+export interface SessionUploadResponse {
+  session: Omit<Session, 'results' | 'symmetry' | 'compensation' | 'symmetryByExercise'>;
+  results: ExerciseResult[];
+  alertsCreated: Alert[];
+  planSuggested: Plan | null;
+}
+
+/** One row of GET /sessions/:id/replays (no frames). */
+export interface ReplaySummary {
+  key: string;
+  exercise: Exercise;
+  side: Side;
+  fps: number;
+  frameCount: number;
+  seconds: number;
+  warningCount: number;
+  uploadedAt: string;
+}
+
+/** Response of POST /sessions/:id/replay. */
+export interface ReplayUploadResponse {
+  sessionId: string;
+  replays: string[];
+  replay: ReplaySummary;
 }
 
 export interface WatchDaily {
