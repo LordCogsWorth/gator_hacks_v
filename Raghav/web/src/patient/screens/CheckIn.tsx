@@ -67,6 +67,7 @@ export function CheckIn() {
                 speak(t.label);
               }}
               aria-pressed={tired === t.v}
+              aria-label={t.label}
               className={`flex min-h-[120px] flex-col items-center justify-center rounded-2xl border-2 p-2 ${
                 tired === t.v ? 'border-neutral-100 bg-neutral-800' : 'border-neutral-700'
               }`}
