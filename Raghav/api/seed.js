@@ -11,13 +11,28 @@
  * Plus one "suggested" plan per patient, then runs the rules engine.
  *
  * Usage: npm run seed
+ *        SEED_TODAY=2026-10-24 npm run seed   (pretend "today" is another date)
+ *
+ * By default "today" is noon UTC of the current date, so the stories line up
+ * with the real clock the rules engine uses at runtime.
  */
 
 const store = require('./store');
 const { evaluateAll, EXERCISES } = require('./rules');
 
-// Anchor "today" so seed data stays consistent during the hackathon demo.
-const TODAY = new Date('2026-10-24T12:00:00.000Z');
+function resolveToday() {
+  if (process.env.SEED_TODAY) {
+    const d = new Date(process.env.SEED_TODAY);
+    if (Number.isNaN(d.getTime())) {
+      throw new Error(`SEED_TODAY is not a valid date: ${process.env.SEED_TODAY}`);
+    }
+    return d;
+  }
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12));
+}
+
+const TODAY = resolveToday();
 
 function daysAgo(n) {
   const d = new Date(TODAY);
@@ -92,36 +107,37 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
+// Dates are relative to TODAY (negative daysAgo = days from now).
 function buildPatients() {
   return [
     {
       id: 'p-maria',
       name: 'Maria Santos',
       weakSide: 'left',
-      strokeDate: '2026-07-12',
+      strokeDate: isoDate(daysAgo(104)),
       phase: 2,
       maxRaiseAngle: 120,
-      nextCheckin: '2026-10-28',
+      nextCheckin: isoDate(daysAgo(-4)),
       bpLimitSys: 150,
     },
     {
       id: 'p-james',
       name: 'James Okonkwo',
       weakSide: 'right',
-      strokeDate: '2026-05-03',
+      strokeDate: isoDate(daysAgo(174)),
       phase: 2,
       maxRaiseAngle: 110,
-      nextCheckin: '2026-10-26',
+      nextCheckin: isoDate(daysAgo(-2)),
       bpLimitSys: 145,
     },
     {
       id: 'p-priya',
       name: 'Priya Nair',
       weakSide: 'left',
-      strokeDate: '2026-08-20',
+      strokeDate: isoDate(daysAgo(65)),
       phase: 1,
       maxRaiseAngle: 100,
-      nextCheckin: '2026-10-30',
+      nextCheckin: isoDate(daysAgo(-6)),
       bpLimitSys: 140,
     },
   ];
@@ -135,8 +151,9 @@ function buildPatients() {
 function generateSessions(patientId, { skipDays, symmetryAt, compensationAt, painAt }) {
   const sessions = [];
   const results = [];
-  // Days 20 ago through yesterday (and sometimes today) — about 3 weeks.
-  for (let ago = 20; ago >= 0; ago--) {
+  // Days 20 ago through yesterday — about 3 weeks. Today is left empty so no
+  // seeded session is in the future, and the live demo upload is "today's".
+  for (let ago = 20; ago >= 1; ago--) {
     if (skipDays.has(ago)) continue;
     // Skip some weekends lightly for realism unless it's a forced miss day.
     const d = daysAgo(ago);
@@ -182,7 +199,7 @@ function generateWatch(patientId, { restingHrAt, bpSysAt, stepsAt, extras }) {
       bpDia: 78 + (ago % 5),
       falls: extras && extras.fallsOn && extras.fallsOn.has(ago) ? 1 : 0,
       weakArmActiveMin: 60 + (20 - ago) * 2,
-      useRatio: 0.4 + (20 - ago) * 0.01,
+      useRatio: Math.round((0.4 + (20 - ago) * 0.01) * 100) / 100,
     });
   }
   return rows;
@@ -221,6 +238,7 @@ function approvedPlan(patient, phase, sessionsPerWeek) {
     approvedBy: 'Dr. Chen',
     nextCheckin: patient.nextCheckin,
     createdAt: daysAgo(21).toISOString(),
+    approvedAt: daysAgo(21).toISOString(),
   };
 }
 
@@ -247,12 +265,14 @@ function seed() {
   const allWatch = [];
   const allPlans = [];
 
-  // ---- Maria: improving 45% → 70%, good adherence ----
+  // ---- Maria: improving 45% → ~71%, good adherence ----
   {
     const maria = patients[0];
     const { sessions, results } = generateSessions(maria.id, {
       skipDays: new Set(), // rarely misses
-      symmetryAt: (ago) => Math.round(lerp(45, 70, (20 - ago) / 20)),
+      // Ends a little above 70 so her last 3 sessions clear the phase-2
+      // target (65%) whichever weekend days get skipped.
+      symmetryAt: (ago) => Math.round(lerp(45, 72, (20 - ago) / 20)),
       compensationAt: () => 12 + Math.round(Math.random() * 5),
       painAt: () => 2,
     });
@@ -354,7 +374,7 @@ function seed() {
   // Run rules as of the seed "today" so alerts match the story.
   const summary = evaluateAll({ now: TODAY });
 
-  console.log('Seeded RehabTrack demo data.');
+  console.log(`Seeded RehabTrack demo data (today = ${TODAY.toISOString().slice(0, 10)}).`);
   console.log(`  patients: ${patients.length}`);
   console.log(`  sessions: ${allSessions.length}`);
   console.log(`  exerciseResults: ${allResults.length}`);

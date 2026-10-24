@@ -5,10 +5,14 @@
  *   app.use('/api', require('../Raghav/api/router'));
  *
  * During development we run this via api/dev-server.js on port 8081.
+ *
+ * Self-contained: parses its own JSON bodies and always answers errors as
+ * JSON ({ error }), so it behaves the same when mounted in another server.
  */
 
 const express = require('express');
 const store = require('./store');
+const { validateSession, validateWatchDaily, validateApproval, WATCH_NUMBER_FIELDS } = require('./validate');
 const {
   evaluatePatient,
   avgSymmetry,
@@ -18,6 +22,9 @@ const {
 } = require('./rules');
 
 const router = express.Router();
+
+// Parse JSON here (not in the host server) so the router works wherever it's mounted.
+router.use(express.json({ limit: '5mb' }));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,6 +61,25 @@ function currentPlanAny(patientId, plans) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   if (suggested) return suggested;
   return currentApprovedPlan(patientId, plans);
+}
+
+/**
+ * Wrap a route handler so any thrown error (sync or async) goes to the JSON
+ * error handler at the bottom instead of crashing the process.
+ */
+function wrap(handler) {
+  return (req, res, next) => {
+    try {
+      Promise.resolve(handler(req, res, next)).catch(next);
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+/** 400 with every field problem listed: { error, details: [{ field, message }] } */
+function badRequest(res, error, details) {
+  return res.status(400).json({ error, details });
 }
 
 function resultsForSession(sessionId, allResults) {
@@ -98,14 +124,14 @@ function latestSymmetrySummary(patientId, sessions, results) {
 // ---------------------------------------------------------------------------
 
 /** GET /health — quick liveness check */
-router.get('/health', (_req, res) => {
+router.get('/health', wrap((_req, res) => {
   res.json({ ok: true, service: 'rehabtrack-api' });
-});
+}));
 
 /**
  * GET /patients — list with summary fields for the care-team list screen.
  */
-router.get('/patients', (_req, res) => {
+router.get('/patients', wrap((_req, res) => {
   const patients = store.readAll('patients');
   const sessions = store.readAll('sessions');
   const results = store.readAll('exerciseResults');
@@ -142,12 +168,12 @@ router.get('/patients', (_req, res) => {
   });
 
   res.json(list);
-});
+}));
 
 /**
  * GET /patients/:id — patient + current plan + open alerts
  */
-router.get('/patients/:id', (req, res) => {
+router.get('/patients/:id', wrap((req, res) => {
   const patient = store.findById('patients', req.params.id);
   if (!patient) {
     return res.status(404).json({ error: 'Patient not found' });
@@ -163,12 +189,12 @@ router.get('/patients/:id', (req, res) => {
     approvedPlan,
     openAlerts: alerts,
   });
-});
+}));
 
 /**
  * GET /patients/:id/sessions — sessions with nested exerciseResults
  */
-router.get('/patients/:id/sessions', (req, res) => {
+router.get('/patients/:id/sessions', wrap((req, res) => {
   const patient = store.findById('patients', req.params.id);
   if (!patient) {
     return res.status(404).json({ error: 'Patient not found' });
@@ -194,58 +220,44 @@ router.get('/patients/:id/sessions', (req, res) => {
     });
 
   res.json(sessions);
-});
+}));
 
 /**
  * POST /sessions — Lucas's patient app uploads a finished session.
  * Body: { patientId, startedAt, endedAt, pain, tiredness, results: ExerciseResult[] }
  */
-router.post('/sessions', (req, res) => {
-  const body = req.body || {};
-  const { patientId, startedAt, endedAt, pain, tiredness, results } = body;
-
-  if (!patientId || !startedAt || !endedAt || !Array.isArray(results)) {
-    return res.status(400).json({
-      error: 'Required: patientId, startedAt, endedAt, results (array)',
-    });
+router.post('/sessions', wrap((req, res) => {
+  // Validate everything BEFORE writing, so a bad upload leaves no partial data.
+  const { errors, value } = validateSession(req.body);
+  if (errors.length > 0) {
+    return badRequest(res, 'Invalid session', errors);
   }
 
-  const patient = store.findById('patients', patientId);
+  const patient = store.findById('patients', value.patientId);
   if (!patient) {
     return res.status(404).json({ error: 'Patient not found' });
   }
 
   const session = {
     id: store.makeId('sess'),
-    patientId,
-    startedAt,
-    endedAt,
-    pain: typeof pain === 'number' ? pain : null,
-    tiredness: typeof tiredness === 'number' ? tiredness : null,
+    patientId: value.patientId,
+    startedAt: value.startedAt,
+    endedAt: value.endedAt,
+    pain: value.pain,
+    tiredness: value.tiredness,
     avgHr: null,
     replayFile: null,
   };
-  store.append('sessions', session);
-
-  const savedResults = results.map((r) => ({
+  const savedResults = value.results.map((r) => ({
     id: store.makeId('er'),
     sessionId: session.id,
-    exercise: r.exercise,
-    side: r.side,
-    bestValue: r.bestValue,
-    reps: r.reps,
-    secPerRep: r.secPerRep,
-    smoothness: r.smoothness,
-    fatigue: r.fatigue,
-    trunkLeanMax: r.trunkLeanMax,
-    shoulderHikeMax: r.shoulderHikeMax,
-    compRepPct: r.compRepPct,
+    ...r,
   }));
-  for (const r of savedResults) {
-    store.append('exerciseResults', r);
-  }
 
-  const ruleResult = evaluatePatient(patientId);
+  store.append('sessions', session);
+  store.writeAll('exerciseResults', [...store.readAll('exerciseResults'), ...savedResults]);
+
+  const ruleResult = evaluatePatient(value.patientId);
 
   res.status(201).json({
     session,
@@ -253,12 +265,12 @@ router.post('/sessions', (req, res) => {
     alertsCreated: ruleResult.alertsCreated,
     planSuggested: ruleResult.planSuggested,
   });
-});
+}));
 
 /**
  * GET /patients/:id/plan — current approved plan (what the patient should do today)
  */
-router.get('/patients/:id/plan', (req, res) => {
+router.get('/patients/:id/plan', wrap((req, res) => {
   const patient = store.findById('patients', req.params.id);
   if (!patient) {
     return res.status(404).json({ error: 'Patient not found' });
@@ -268,12 +280,12 @@ router.get('/patients/:id/plan', (req, res) => {
     return res.status(404).json({ error: 'No approved plan for this patient' });
   }
   res.json(plan);
-});
+}));
 
 /**
  * GET /patients/:id/watch — watchDaily rows for charts
  */
-router.get('/patients/:id/watch', (req, res) => {
+router.get('/patients/:id/watch', wrap((req, res) => {
   const patient = store.findById('patients', req.params.id);
   if (!patient) {
     return res.status(404).json({ error: 'Patient not found' });
@@ -284,18 +296,19 @@ router.get('/patients/:id/watch', (req, res) => {
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date));
   res.json(rows);
-});
+}));
 
 /**
  * POST /watch/daily — one day of Health data from the iPhone Shortcut.
- * Same patientId + date replaces the previous row.
+ * Same patientId + date MERGES into the existing row: fields not sent
+ * (or sent as null) keep their previous value.
  */
-router.post('/watch/daily', (req, res) => {
-  const body = req.body || {};
-  const { patientId, date } = body;
-  if (!patientId || !date) {
-    return res.status(400).json({ error: 'Required: patientId, date (YYYY-MM-DD)' });
+router.post('/watch/daily', wrap((req, res) => {
+  const { errors, value } = validateWatchDaily(req.body);
+  if (errors.length > 0) {
+    return badRequest(res, 'Invalid watch daily data', errors);
   }
+  const { patientId, date, fields } = value;
 
   const patient = store.findById('patients', patientId);
   if (!patient) {
@@ -304,53 +317,44 @@ router.post('/watch/daily', (req, res) => {
 
   const existing = store.readAll('watchDaily');
   const index = existing.findIndex((w) => w.patientId === patientId && w.date === date);
-  const row = {
-    id: index >= 0 ? existing[index].id : store.makeId('wd'),
-    patientId,
-    date,
-    steps: body.steps ?? null,
-    exerciseMin: body.exerciseMin ?? null,
-    standHr: body.standHr ?? null,
-    restingHr: body.restingHr ?? null,
-    hrv: body.hrv ?? null,
-    sleepHr: body.sleepHr ?? null,
-    bpSys: body.bpSys ?? null,
-    bpDia: body.bpDia ?? null,
-    falls: body.falls ?? null,
-    weakArmActiveMin: body.weakArmActiveMin ?? null,
-    useRatio: body.useRatio ?? null,
-  };
+  const prev = index >= 0 ? existing[index] : {};
+  const row = { id: prev.id || store.makeId('wd'), patientId, date };
+  for (const f of WATCH_NUMBER_FIELDS) {
+    row[f] = f in fields ? fields[f] : prev[f] ?? null;
+  }
 
   if (index >= 0) {
     existing[index] = row;
-    store.writeAll('watchDaily', existing);
   } else {
-    store.append('watchDaily', row);
+    existing.push(row);
   }
+  store.writeAll('watchDaily', existing);
 
   // Re-run rules so BP / HR / fall alerts update.
   const ruleResult = evaluatePatient(patientId);
 
   res.status(201).json({ watchDaily: row, alertsCreated: ruleResult.alertsCreated });
-});
+}));
 
 /**
  * GET /alerts — all open (unacknowledged) alerts across patients
  */
-router.get('/alerts', (_req, res) => {
+router.get('/alerts', wrap((_req, res) => {
   const alerts = store
     .readAll('alerts')
     .filter((a) => !a.acknowledged)
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   res.json(alerts);
-});
+}));
 
 /**
  * PATCH /alerts/:id — acknowledge an alert
  * Body: { acknowledged: true } (or just hit the endpoint)
+ * Sets acknowledgedAt (kept from the first acknowledgement), which the rules
+ * engine uses to avoid re-raising the same alert for 72h without newer data.
  */
-router.patch('/alerts/:id', (req, res) => {
+router.patch('/alerts/:id', wrap((req, res) => {
   const alerts = store.readAll('alerts');
   const index = alerts.findIndex((a) => a.id === req.params.id);
   if (index < 0) {
@@ -359,31 +363,34 @@ router.patch('/alerts/:id', (req, res) => {
   alerts[index] = {
     ...alerts[index],
     acknowledged: true,
+    acknowledgedAt: alerts[index].acknowledgedAt || new Date().toISOString(),
   };
   store.writeAll('alerts', alerts);
   res.json(alerts[index]);
-});
+}));
 
 /**
  * POST /plans/:id/approve — care team approves (and optionally edits) a plan
  * Body: { exercises?, sessionsPerWeek?, nextCheckin?, approvedBy }
  */
-router.post('/plans/:id/approve', (req, res) => {
+router.post('/plans/:id/approve', wrap((req, res) => {
   const plans = store.readAll('plans');
   const index = plans.findIndex((p) => p.id === req.params.id);
   if (index < 0) {
     return res.status(404).json({ error: 'Plan not found' });
   }
 
-  const body = req.body || {};
-  if (!body.approvedBy) {
-    return res.status(400).json({ error: 'approvedBy is required' });
+  const { errors, value: body } = validateApproval(req.body || {});
+  if (errors.length > 0) {
+    return badRequest(res, 'Invalid plan approval', errors);
   }
 
   const plan = { ...plans[index] };
-  if (Array.isArray(body.exercises)) plan.exercises = body.exercises;
-  if (typeof body.sessionsPerWeek === 'number') plan.sessionsPerWeek = body.sessionsPerWeek;
-  if (typeof body.nextCheckin === 'string') plan.nextCheckin = body.nextCheckin;
+  if (body.exercises !== undefined) {
+    plan.exercises = body.exercises.map((e) => ({ exercise: e.exercise, reps: e.reps, target: e.target }));
+  }
+  if (body.sessionsPerWeek !== undefined) plan.sessionsPerWeek = body.sessionsPerWeek;
+  if (body.nextCheckin !== undefined) plan.nextCheckin = body.nextCheckin;
   plan.status = 'approved';
   plan.approvedBy = body.approvedBy;
   plans[index] = plan;
@@ -404,6 +411,29 @@ router.post('/plans/:id/approve', (req, res) => {
   }
 
   res.json(plan);
+}));
+
+// ---------------------------------------------------------------------------
+// Fallbacks: unknown route and errors, always as JSON (never Express's HTML page)
+// ---------------------------------------------------------------------------
+
+router.use((req, res) => {
+  res.status(404).json({ error: `No route for ${req.method} ${req.originalUrl}` });
+});
+
+// Express recognises an error handler by its 4 arguments, so keep `_next`.
+// eslint-disable-next-line no-unused-vars
+router.use((err, req, res, _next) => {
+  const status = err.status || err.statusCode || 500;
+  let message = err.message || 'Request failed';
+  if (err.type === 'entity.parse.failed') message = 'Request body is not valid JSON';
+  if (err.type === 'entity.too.large') message = 'Request body is too large (limit 5mb)';
+  if (status >= 500) {
+    console.error(`[rehabtrack-api] ${req.method} ${req.originalUrl} failed:`, err);
+    message = 'Internal server error';
+  }
+  if (res.headersSent) return;
+  res.status(status).json({ error: message });
 });
 
 module.exports = router;

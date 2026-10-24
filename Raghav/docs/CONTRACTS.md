@@ -19,6 +19,7 @@ type BodySide = 'left' | 'right';
 ```
 
 All timestamps are ISO-8601 strings (e.g. `"2026-10-24T15:30:00.000Z"`). Dates without time are `"YYYY-MM-DD"`.
+On input, `POST /api/sessions` also accepts epoch milliseconds (`Date.now()`) for `startedAt` / `endedAt`; the API stores and returns ISO UTC strings.
 
 Units: angles in degrees, `hand_open` values in % (0–100), distances in metres, durations in seconds, heart rate in bpm, blood pressure in mmHg.
 
@@ -118,6 +119,8 @@ Coordinates come from MediaPipe's world landmarks (`worldLandmarks`). Depth is e
 
 Average heart rate for the session is filled in later from the watch data (matched by `startedAt` / `endedAt`), so the patient app doesn't need to send it.
 
+The API validates the whole body before saving anything and answers `400 { error, details: [{ field, message }] }` listing every problem (rules in `Raghav/api/API.md`). Every `ExerciseResult` number is required and must be finite; `compRepPct` is 0–100; `pain` 0–10 and `tiredness` 1–5 are optional; 1–6 results per session.
+
 Replays are uploaded separately: `POST /api/sessions/:id/replay` with a `ReplayFile` body (phase 3).
 
 ## 6. Watch daily data (iPhone Shortcut → Raghav's API)
@@ -142,7 +145,7 @@ Replays are uploaded separately: `POST /api/sessions/:id/replay` with a `ReplayF
 }
 ```
 
-Every field except `patientId` and `date` is optional; send what the Shortcut can read. Posting the same `patientId` + `date` again replaces that day.
+Every field except `patientId` and `date` is optional; send what the Shortcut can read. Values must be JSON numbers, not strings. Posting the same `patientId` + `date` again **merges**: sent fields overwrite, missing or `null` fields keep their previous value.
 
 ## 7. Kyle's watch server (existing, `main/server/index.js`, port 8080)
 
@@ -153,7 +156,7 @@ Raw watch samples go to Kyle's server, not Raghav's API:
 - `POST /session/start`, `POST /session/stop`, `GET /session`
 - `GET /health`
 
-At merge time, Raghav's API router is mounted into this server at `/api`, so everything runs on one port.
+At merge time, Raghav's API router is mounted into this server at `/api`, so everything runs on one port. The router parses its own JSON (5 MB limit) and returns JSON errors, so mount it **before** this server's own `app.use(express.json({ limit: '1mb' }))`; otherwise that parser runs first, its 1 MB limit applies to replays, and its parse errors come back as HTML.
 
 ## 8. Ports during development
 

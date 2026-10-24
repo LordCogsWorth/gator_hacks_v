@@ -5,6 +5,8 @@
  * - Suggests a next-phase plan when the patient is ready.
  * - Raises alerts (plateau, setback, compensation, adherence, pain, HR, BP, fall).
  * - Never creates a duplicate "open" alert of the same type for the same patient.
+ * - Doesn't re-raise an alert the care team acknowledged in the last 72h
+ *   unless newer data has arrived since (see isCoolingDown).
  *
  * Pure helpers are exported so unit tests can call them without touching files.
  */
@@ -12,6 +14,13 @@
 const store = require('./store');
 
 const EXERCISES = ['arm_raise', 'forward_reach', 'hand_open'];
+
+// After an alert is acknowledged, the same alert type stays quiet this long
+// unless newer triggering data arrives.
+const ALERT_COOLDOWN_HOURS = 72;
+
+// Alert types driven by Apple Watch rows; every other type is driven by sessions.
+const WATCH_ALERT_TYPES = ['heart-rate', 'blood-pressure', 'fall'];
 
 // Phase targets: symmetry % the weak arm should reach before moving on.
 const PHASE_TARGETS = {
@@ -165,13 +174,31 @@ function hasOpenAlert(alerts, patientId, type) {
   return alerts.some((a) => a.patientId === patientId && a.type === type && !a.acknowledged);
 }
 
-function makeAlert(patientId, type, detail) {
+/**
+ * True when an alert of this type was acknowledged within the cooldown window
+ * and the triggering data is NOT newer than that acknowledgement.
+ * dataTime = ISO time of the newest data the rule looked at (null = no data).
+ * Acknowledged alerts without acknowledgedAt (older data) never block.
+ */
+function isCoolingDown(alerts, patientId, type, dataTime, now = new Date()) {
+  const cutoff = now.getTime() - ALERT_COOLDOWN_HOURS * 60 * 60 * 1000;
+  const dataMs = dataTime ? Date.parse(dataTime) : -Infinity;
+  return alerts.some((a) => {
+    if (a.patientId !== patientId || a.type !== type || !a.acknowledged || !a.acknowledgedAt) {
+      return false;
+    }
+    const ackMs = Date.parse(a.acknowledgedAt);
+    return ackMs >= cutoff && dataMs <= ackMs;
+  });
+}
+
+function makeAlert(patientId, type, detail, now = new Date()) {
   return {
     id: store.makeId('alert'),
     patientId,
     type,
     detail,
-    createdAt: new Date().toISOString(),
+    createdAt: now.toISOString(),
     acknowledged: false,
   };
 }
@@ -243,11 +270,20 @@ function evaluatePatient(patientId, options = {}) {
   let plans = store.readAll('plans');
 
   const timeline = sessionTimeline(patientId, sessions, results);
+  const lastEntry = timeline[timeline.length - 1];
+  const latestWatch = watchDaily.slice().sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   const created = [];
+
+  // Newest data each kind of rule looks at, for the acknowledgement cooldown.
+  // A watch row covers a whole day, so its date counts from midnight UTC.
+  const latestSessionAt = lastEntry ? lastEntry.session.startedAt : null;
+  const latestWatchAt = latestWatch ? `${latestWatch.date}T00:00:00.000Z` : null;
 
   const addIfNew = (type, detail) => {
     if (hasOpenAlert(alerts, patientId, type)) return;
-    const alert = makeAlert(patientId, type, detail);
+    const dataTime = WATCH_ALERT_TYPES.includes(type) ? latestWatchAt : latestSessionAt;
+    if (isCoolingDown(alerts, patientId, type, dataTime, now)) return;
+    const alert = makeAlert(patientId, type, detail, now);
     alerts.push(alert);
     created.push(alert);
   };
@@ -269,7 +305,6 @@ function evaluatePatient(patientId, options = {}) {
     );
   }
 
-  const lastEntry = timeline[timeline.length - 1];
   if (lastEntry && lastEntry.compensation != null && lastEntry.compensation > 50) {
     addIfNew(
       'compensation',
@@ -301,7 +336,6 @@ function evaluatePatient(patientId, options = {}) {
     );
   }
 
-  const latestWatch = watchDaily.slice().sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   if (
     latestWatch &&
     typeof latestWatch.bpSys === 'number' &&
@@ -359,6 +393,9 @@ function evaluateAll(options = {}) {
 module.exports = {
   EXERCISES,
   PHASE_TARGETS,
+  ALERT_COOLDOWN_HOURS,
+  WATCH_ALERT_TYPES,
+  isCoolingDown,
   symmetryForExercise,
   avgSymmetry,
   avgCompensation,

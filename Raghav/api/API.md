@@ -2,9 +2,10 @@
 
 Base URL during development: **`http://localhost:8081/api`**
 
-If Raghav’s laptop IP is different on Wi‑Fi, replace `localhost` with that IP.
+From another laptop on the same Wi‑Fi, replace `localhost` with the IP the API prints on startup (`on your LAN: http://…`). Browser apps served from `localhost`, `127.0.0.1`, or a private LAN address (`10.x`, `172.16–31.x`, `192.168.x`) are allowed by CORS; other origins can be added with the `ALLOWED_ORIGINS` env var (comma-separated).
 
-All timestamps are ISO-8601 strings (e.g. `"2026-10-24T15:30:00.000Z"`).
+All timestamps the API **returns** are ISO-8601 UTC strings (e.g. `"2026-10-24T15:30:00.000Z"`).
+`POST /sessions` also **accepts** epoch milliseconds (e.g. `Date.now()`) for `startedAt` / `endedAt` and converts them to ISO. Epoch *seconds* are rejected.
 Dates without time are `"YYYY-MM-DD"`.
 
 Exercises: `"arm_raise"` | `"forward_reach"` | `"hand_open"`  
@@ -12,6 +13,28 @@ Sides: `"weak"` | `"healthy"`
 Weak body side on a patient: `"left"` | `"right"`
 
 Symmetry % for an exercise = weak `bestValue` ÷ healthy `bestValue` × 100.
+
+### Errors
+
+Every error is JSON, never an HTML page:
+
+```json
+{ "error": "Patient not found" }
+```
+
+Validation errors (`400`) also list **every** problem, so you can fix them all at once:
+
+```json
+{
+  "error": "Invalid session",
+  "details": [
+    { "field": "startedAt", "message": "must be an ISO-8601 string or epoch milliseconds" },
+    { "field": "results[0].reps", "message": "must be a finite number" }
+  ]
+}
+```
+
+Malformed JSON → `400 { "error": "Request body is not valid JSON" }`. Unknown route → `404`. Server bug → `500 { "error": "Internal server error" }`.
 
 ---
 
@@ -222,6 +245,22 @@ Upload a finished exercise session. The API saves it, runs the rules engine (ale
 
 Send up to 6 results (3 exercises × 2 sides). You do **not** need to send `avgHr` or a replay here.
 
+**Validation** (checked before anything is saved — a rejected upload writes nothing):
+
+| Field | Rule |
+| --- | --- |
+| `patientId` | required string |
+| `startedAt`, `endedAt` | required; ISO-8601 string **or** epoch milliseconds (number). Stored as ISO UTC. |
+| `pain` | optional number 0–10 (omit or `null` if not asked) |
+| `tiredness` | optional number 1–5 |
+| `results` | array of 1–6 items, no duplicate `exercise` + `side` pair |
+| `results[i].exercise` | `arm_raise` \| `forward_reach` \| `hand_open` |
+| `results[i].side` | `weak` \| `healthy` |
+| `results[i].bestValue`, `reps`, `secPerRep`, `smoothness`, `fatigue`, `trunkLeanMax`, `shoulderHikeMax` | required finite numbers |
+| `results[i].compRepPct` | required number 0–100 |
+
+Extra fields are ignored.
+
 **Response `201`**
 ```json
 {
@@ -241,7 +280,7 @@ Send up to 6 results (3 exercises × 2 sides). You do **not** need to send `avgH
 }
 ```
 
-**Response `400`** if required fields are missing  
+**Response `400`** — `{ error: "Invalid session", details: [...] }` (see [Errors](#errors))  
 **Response `404`** if `patientId` is unknown
 
 ---
@@ -310,7 +349,11 @@ Daily Apple Watch / Health rows for charts (oldest first).
 
 ## POST /api/watch/daily
 
-One day of Health data from the iPhone Shortcut. Posting the same `patientId` + `date` again **replaces** that day. Every field except `patientId` and `date` is optional.
+One day of Health data from the iPhone Shortcut. Every field except `patientId` and `date` is optional.
+
+Posting the same `patientId` + `date` again **merges** into that day: fields you send overwrite, fields you leave out (or send as `null`) keep their previous value. So the Shortcut can send heart rate in one call and blood pressure in another.
+
+**Validation:** `date` must be a real date in `YYYY-MM-DD` form; every other field must be a finite **number** (not a string like `"4200"`). Unknown fields are ignored. Errors → `400 { error: "Invalid watch daily data", details: [...] }`.
 
 **Request body**
 ```json
@@ -331,10 +374,10 @@ One day of Health data from the iPhone Shortcut. Posting the same `patientId` + 
 }
 ```
 
-**Response `201`**
+**Response `201`** (also for a merge into an existing day)
 ```json
 {
-  "watchDaily": { /* saved row with id */ },
+  "watchDaily": { /* the full merged row with id */ },
   "alertsCreated": []
 }
 ```
@@ -366,7 +409,13 @@ Alert `type` values:
 
 ## PATCH /api/alerts/:id
 
-Acknowledge an alert (hides it from open lists).
+Acknowledge an alert (hides it from open lists). Sets `acknowledgedAt` (kept from the first acknowledgement).
+
+**Cooldown:** once acknowledged, the rules engine won't raise the same alert type for that patient again for **72 hours** — unless newer triggering data arrives after `acknowledgedAt`:
+- session alerts (`plateau`, `setback`, `compensation`, `adherence`, `pain`): a session whose `startedAt` is after `acknowledgedAt`;
+- watch alerts (`heart-rate`, `blood-pressure`, `fall`): a watch row whose `date` (taken as midnight UTC) is after `acknowledgedAt`. Re-posting today's row doesn't count; tomorrow's does.
+
+After 72 hours the alert can be raised again from the same data.
 
 **Request body** (optional)
 ```json
@@ -381,7 +430,8 @@ Acknowledge an alert (hides it from open lists).
   "type": "plateau",
   "detail": "…",
   "createdAt": "2026-10-24T12:00:00.000Z",
-  "acknowledged": true
+  "acknowledged": true,
+  "acknowledgedAt": "2026-10-24T16:05:00.000Z"
 }
 ```
 
@@ -406,6 +456,8 @@ Care team approves a plan (usually a `suggested` one). You can edit exercises / 
 ```
 
 `exercises`, `sessionsPerWeek`, and `nextCheckin` are optional — omit any field you don’t want to change.
+
+**Validation:** `approvedBy` non-empty string; `exercises` non-empty array of `{ exercise, reps (whole number ≥ 1), target (number > 0) }`; `sessionsPerWeek` whole number 1–14; `nextCheckin` `YYYY-MM-DD`. Errors → `400 { error: "Invalid plan approval", details: [...] }`.
 
 **Response `200`** — the plan with `status: "approved"` and `approvedBy` set.  
 Also updates the patient’s `nextCheckin` and `phase` when provided.

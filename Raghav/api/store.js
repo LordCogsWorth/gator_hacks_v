@@ -2,12 +2,14 @@
  * Simple JSON-file storage.
  * Each "collection" is one file under api/data/ (e.g. patients.json).
  * Safe for a hackathon demo — no database needed.
+ *
+ * Set REHAB_DATA_DIR to use a different folder (tests use a temp dir).
  */
 
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.REHAB_DATA_DIR || path.join(__dirname, 'data');
 
 /** Make sure the data folder exists. */
 function ensureDataDir() {
@@ -40,10 +42,15 @@ function readAll(name) {
 
 /**
  * Overwrite a whole collection with a new array.
+ * Writes to a temp file then renames, so a crash mid-write can't leave
+ * half a JSON file behind.
  */
 function writeAll(name, items) {
   ensureDataDir();
-  fs.writeFileSync(filePath(name), JSON.stringify(items, null, 2) + '\n', 'utf8');
+  const file = filePath(name);
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(items, null, 2) + '\n', 'utf8');
+  fs.renameSync(tmp, file);
 }
 
 /**

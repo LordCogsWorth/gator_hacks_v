@@ -3,10 +3,21 @@
  * Run with: npm test  (uses Node's built-in test runner — no extra libraries)
  */
 
-const { describe, it } = require('node:test');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { describe, it, beforeEach, after } = require('node:test');
 const assert = require('node:assert/strict');
 
+// evaluatePatient reads/writes the JSON store, so point the store at a temp
+// folder BEFORE requiring rules.js (store.js reads REHAB_DATA_DIR on load).
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'rehab-rules-'));
+process.env.REHAB_DATA_DIR = DATA_DIR;
+
+const store = require('./store');
 const {
+  evaluatePatient,
+  isCoolingDown,
   symmetryForExercise,
   avgSymmetry,
   avgCompensation,
@@ -185,5 +196,111 @@ describe('hasOpenAlert', () => {
     assert.equal(hasOpenAlert(alerts, 'p-maria', 'plateau'), true);
     assert.equal(hasOpenAlert(alerts, 'p-maria', 'pain'), false);
     assert.equal(hasOpenAlert(alerts, 'p-james', 'plateau'), false);
+  });
+});
+
+describe('isCoolingDown', () => {
+  const now = new Date('2026-10-24T12:00:00.000Z');
+  const acked = (acknowledgedAt) => [
+    { patientId: 'p', type: 'pain', acknowledged: true, acknowledgedAt },
+  ];
+
+  it('blocks when acknowledged recently and data is not newer', () => {
+    const alerts = acked('2026-10-24T10:00:00.000Z');
+    assert.equal(isCoolingDown(alerts, 'p', 'pain', '2026-10-24T09:00:00.000Z', now), true);
+  });
+
+  it('does not block when the data is newer than the acknowledgement', () => {
+    const alerts = acked('2026-10-24T10:00:00.000Z');
+    assert.equal(isCoolingDown(alerts, 'p', 'pain', '2026-10-24T11:00:00.000Z', now), false);
+  });
+
+  it('does not block once the 72h window has passed', () => {
+    const alerts = acked('2026-10-20T10:00:00.000Z');
+    assert.equal(isCoolingDown(alerts, 'p', 'pain', '2026-10-19T09:00:00.000Z', now), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// evaluatePatient against a real (temporary) JSON store
+// ---------------------------------------------------------------------------
+
+describe('evaluatePatient', () => {
+  const NOW = new Date('2026-10-24T12:00:00.000Z');
+  const HOUR = 60 * 60 * 1000;
+
+  // One patient whose sessions always trip the compensation rule (> 50%).
+  function addSession(startedAt) {
+    const id = store.makeId('sess');
+    store.append('sessions', {
+      id, patientId: 'p-test', startedAt, endedAt: startedAt, pain: 2, tiredness: 2, avgHr: null, replayFile: null,
+    });
+    const rows = [
+      { ...result('arm_raise', 'healthy', 160), sessionId: id },
+      { ...result('arm_raise', 'weak', 100, 60), sessionId: id },
+    ];
+    store.writeAll('exerciseResults', [...store.readAll('exerciseResults'), ...rows]);
+  }
+
+  function compensationAlerts() {
+    return store.readAll('alerts').filter((a) => a.type === 'compensation');
+  }
+
+  function acknowledgeAll(at) {
+    store.writeAll(
+      'alerts',
+      store.readAll('alerts').map((a) => ({ ...a, acknowledged: true, acknowledgedAt: at }))
+    );
+  }
+
+  beforeEach(() => {
+    for (const name of ['sessions', 'exerciseResults', 'watchDaily', 'alerts', 'plans']) {
+      store.writeAll(name, []);
+    }
+    store.writeAll('patients', [
+      { id: 'p-test', name: 'Test', weakSide: 'left', phase: 1, nextCheckin: '2026-10-30', bpLimitSys: 140 },
+    ]);
+    addSession('2026-10-24T09:00:00.000Z');
+  });
+
+  after(() => fs.rmSync(DATA_DIR, { recursive: true, force: true }));
+
+  it('does not create a duplicate open alert', () => {
+    const first = evaluatePatient('p-test', { now: NOW });
+    assert.ok(first.alertsCreated.some((a) => a.type === 'compensation'));
+    const second = evaluatePatient('p-test', { now: NOW });
+    assert.equal(second.alertsCreated.length, 0);
+    assert.equal(compensationAlerts().length, 1);
+  });
+
+  it('does not re-raise an acknowledged alert without newer data', () => {
+    evaluatePatient('p-test', { now: NOW });
+    acknowledgeAll(new Date(NOW.getTime() - HOUR).toISOString());
+    const again = evaluatePatient('p-test', { now: NOW });
+    assert.equal(again.alertsCreated.length, 0);
+    assert.equal(compensationAlerts().length, 1);
+  });
+
+  it('re-raises an acknowledged alert when a newer session arrives', () => {
+    evaluatePatient('p-test', { now: NOW });
+    acknowledgeAll(new Date(NOW.getTime() - HOUR).toISOString());
+    addSession(new Date(NOW.getTime() - 10 * 60 * 1000).toISOString()); // after the acknowledgement
+    const again = evaluatePatient('p-test', { now: NOW });
+    assert.ok(again.alertsCreated.some((a) => a.type === 'compensation'));
+    assert.equal(compensationAlerts().filter((a) => !a.acknowledged).length, 1);
+  });
+
+  it('treats a re-posted watch day as old data, but a new day as newer', () => {
+    store.writeAll('watchDaily', [{ id: 'wd-1', patientId: 'p-test', date: '2026-10-24', bpSys: 150 }]);
+    assert.ok(evaluatePatient('p-test', { now: NOW }).alertsCreated.some((a) => a.type === 'blood-pressure'));
+    acknowledgeAll(new Date(NOW.getTime() - HOUR).toISOString());
+
+    // Same date again (e.g. Shortcut re-sent today's numbers): stays quiet.
+    assert.equal(evaluatePatient('p-test', { now: NOW }).alertsCreated.length, 0);
+
+    // Next day's reading is still high: raise it again.
+    store.append('watchDaily', { id: 'wd-2', patientId: 'p-test', date: '2026-10-25', bpSys: 152 });
+    const nextDay = new Date('2026-10-25T12:00:00.000Z');
+    assert.ok(evaluatePatient('p-test', { now: nextDay }).alertsCreated.some((a) => a.type === 'blood-pressure'));
   });
 });
