@@ -55,19 +55,20 @@ export function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center gap-4 border-b border-neutral-800 px-4 py-4 sm:px-8">
+        {/* Phones: one row of logo mark, one-line title, voice icon and Call 911. */}
+        <header className="flex items-center gap-2 border-b border-neutral-800 px-2 py-2 sm:gap-4 sm:px-8 sm:py-4">
           <div className="lg:hidden">
-            <Logo />
+            <Logo compact />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
-            <p className="text-lg text-neutral-400">{subtitle}</p>
+            <h1 className="truncate text-lg font-semibold sm:text-3xl">{title}</h1>
+            <p className="hidden text-lg text-neutral-400 sm:block">{subtitle}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
             <VoiceToggle />
             <button
               onClick={openSigns}
-              className="flex min-h-[48px] items-center gap-2 rounded-xl bg-red-700 px-4 text-base font-semibold text-white"
+              className="flex min-h-[48px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-red-700 px-3 text-base font-semibold text-white sm:px-4"
             >
               <Phone className="h-5 w-5" /> Call 911
             </button>
@@ -108,11 +109,12 @@ export function Layout({ children }: { children: ReactNode }) {
   );
 }
 
-function Logo() {
+/** `compact` shows only the mark below sm, so the phone header fits on one row. */
+function Logo({ compact }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-2">
-      <BrandMark />
-      <span className="font-brand text-xl font-semibold">{BRAND_NAME}</span>
+      <BrandMark className={compact ? 'h-9 w-9 sm:h-10 sm:w-10' : undefined} />
+      <span className={`font-brand text-xl font-semibold ${compact ? 'hidden sm:inline' : ''}`}>{BRAND_NAME}</span>
     </div>
   );
 }
@@ -157,9 +159,9 @@ function VoiceToggle() {
   return (
     <button
       onClick={() => setMuted(!muted)}
-      aria-pressed={!muted}
+      aria-label={muted ? 'Voice off, tap to turn the voice on' : 'Voice on, tap to turn the voice off'}
       title={muted ? 'Voice off' : 'Voice on'}
-      className="flex min-h-[48px] items-center gap-2 rounded-xl border border-neutral-700 px-4 text-base font-medium"
+      className="flex min-h-[48px] items-center gap-2 rounded-xl border border-neutral-700 px-3 text-base font-medium sm:px-4"
     >
       {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
       <span className="hidden sm:inline">{muted ? 'Voice off' : 'Voice on'}</span>
