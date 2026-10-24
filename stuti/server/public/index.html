@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RehabTrack Stroke Lab</title>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<style>
+:root{color-scheme:dark;--bg:#0f172a;--border:#1f2937;--muted:#9ca3af;--text:#e5e7eb;--ok:#22c55e;--mid:#f59e0b;--bad:#ef4444;--accent:#38bdf8}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:radial-gradient(circle at top,#1e293b,var(--bg));color:var(--text)}
+.wrap{max-width:1600px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:24px}.sub{color:var(--muted);font-size:13px}.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.big{font-size:44px;font-weight:800;line-height:1.05}
+.card{background:rgba(17,24,39,.92);border:1px solid var(--border);border-radius:14px;padding:12px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.main{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.bottom{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:1000px){.main,.bottom{grid-template-columns:1fr}}
+.stage,#three{position:relative;width:100%;aspect-ratio:4/3;margin-top:8px;background:#020617;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#three canvas{display:block;width:100%;height:100%}
+.scores{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.score{border:1px solid var(--border);border-radius:10px;padding:10px}
+button,select,input{background:#0b1220;color:var(--text);border:1px solid #334155;border-radius:8px;padding:6px 10px;font-size:13px}
+button{cursor:pointer}button.primary{background:#0369a1;border-color:#0284c7;font-weight:700}button.weak{background:#b91c1c;border-color:#dc2626;font-weight:700}
+button:disabled{opacity:.5}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 4px;border-bottom:1px solid var(--border);text-align:left}th{color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase}
+.pill{padding:2px 10px;border-radius:999px;font-size:13px;font-weight:700;background:#0284c7;color:#020617}
+.alert{display:none;background:rgba(239,68,68,.15);border:1px solid var(--bad);color:#fca5a5;padding:6px 10px;border-radius:8px;margin-top:8px}
+input[type=number]{width:70px}
+.wscr{width:200px;height:200px;margin:10px auto 0;background:#000;border:6px solid #2b2f36;border-radius:42px;padding:18px 10px;text-align:center;transition:border-color .2s}.wapp{color:#7dd3fc;font-weight:700;font-size:12px}.wt{font-weight:700;font-size:14px;margin-top:4px}.wbig{font-size:40px;font-weight:700;color:#f87171}.wsub{font-size:11px;color:#9ca3af}input[type=range]{width:100%;padding:0}
+</style>
+</head>
+<body><div class="wrap">
+<header>
+  <div><h1>RehabTrack Stroke Lab</h1><div class="sub">Pose + Hand tracking · angles, reps, compensation, hand opening · 3D replay · Gemma summary</div></div>
+  <div class="row">
+    <label class="sub">Exercise <select id="exSel"><option value="arm_raise">1. Arm raise to the side</option><option value="forward_reach">2. Forward reach</option><option value="hand_open">3. Hand open / close</option></select></label>
+    <label class="sub">Weak arm <select id="weakSel"><option value="L">Left</option><option value="R">Right</option></select></label>
+    <button id="camBtn">Start camera</button>
+    <button id="recHealthy" class="primary">Record healthy arm</button>
+    <button id="recWeak" class="weak">Record weak arm</button>
+    <button id="recStop">Stop</button>
+  </div>
+</header>
+<div id="status" class="sub mono" style="margin-top:6px">Start the camera, then record the healthy arm first, the weak arm second. Begin each recording with the arm at rest for 1 second (sets your baseline).</div>
+<div id="compAlert" class="alert">⚠️ Compensation: trunk lean or shoulder hike. Sit or stand tall.</div>
+
+<div class="main">
+  <div class="card">
+    <div class="row"><span class="label">Live camera · pose + hand</span><span id="hud" class="mono sub">models idle</span></div>
+    <div class="stage"><video id="video" playsinline muted autoplay></video><canvas id="overlay"></canvas></div>
+    <div class="scores">
+      <div class="score"><div class="label" id="liveLabel">Live value</div><div id="liveMetric" class="big">--</div></div>
+      <div class="score"><div class="label">Reps</div><div id="liveReps" class="big">0</div></div>
+      <div class="score"><div class="label">Trunk lean</div><div id="liveLean" class="big" style="font-size:28px">--</div></div>
+      <div class="score"><div class="label">Shoulder hike</div><div id="liveHike" class="big" style="font-size:28px">--</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row"><span class="label">3D stick figure · live or replay</span><span class="sub">drag to rotate · scroll to zoom · for watching, not measuring</span></div>
+    <div id="three"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="playBtn">▶ Replay</button><button id="liveBtn">Live</button>
+      <button id="saveBtn">Save replay (.json)</button>
+      <label class="sub">Load <input id="loadFile" type="file" accept=".json" style="max-width:190px" /></label>
+    </div>
+    <input id="scrub" type="range" min="0" max="0" value="0" style="margin-top:8px" />
+    <div id="replayInfo" class="sub mono">No replay loaded. Record a session, then press Replay.</div>
+    <div id="muscleInfo" class="sub" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<div class="bottom">
+  <div class="card"><div class="label">Session report</div><div id="rehabOut" style="margin-top:8px;line-height:1.6">Record the healthy arm, then the weak arm, then press Stop.</div></div>
+  <div class="card">
+    <div class="label">Compensation thresholds (therapist-adjustable)</div>
+    <div class="row" style="justify-content:flex-start;margin-top:8px"><label class="sub">Lean ° <input id="leanTh" type="number" value="12" min="1" max="45" /></label>
+    <label class="sub">Hike % of shoulder width <input id="hikeTh" type="number" value="10" min="1" max="50" /></label></div>
+    <p class="sub">Both are measured above this person's rest baseline. Starting values only: tune on real patients.</p>
+  </div>
+</div>
+<div class="card" style="margin-top:12px;border-color:#38bdf8"><div class="label" style="color:#38bdf8">Gemma clinical summary</div>
+<div id="gemmaOut" class="sub" style="margin-top:8px;white-space:pre-wrap">Generated after both arms are recorded. Needs: node gemma-server.mjs</div></div>
+<div class="card" style="margin-top:12px"><div class="label">Weakness findings</div><div id="findings" class="sub" style="margin-top:6px">Record both arms and press Stop to find likely weak muscles. They glow on the 3D figure.</div></div>
+<div class="card" style="margin-top:12px"><div class="row"><span class="label">Send exercise to Apple Watch (via ntfy)</span><span class="sub">topic <code id="ntfyTopic" class="mono" style="user-select:all"></code></span></div>
+<div class="sub" style="margin:6px 0">One-time setup: install ntfy on your iPhone, subscribe to the topic above, then Watch app → Notifications → ntfy → Mirror my iPhone. Keep the topic private.</div>
+<div class="row" style="justify-content:flex-start"><select id="exPick" style="min-width:260px"></select><button id="sendEx" class="primary">⌚ Send to watch</button><span class="sub">repeat every</span><input id="remMin" type="number" value="30" min="1" max="240" /><span class="sub">min</span><button id="remBtn">Start reminders</button></div>
+<div id="exPrev" class="sub" style="margin-top:8px"></div><div id="sendLog" class="mono sub"></div>
+<div class="label" style="margin-top:10px">Watch preview · live while recording</div>
+<div id="watchScr" class="wscr"><div class="wapp">Mobility Lab</div><div id="wName" class="wt">Exercise</div><div id="wVal" class="wbig">--</div><div id="wReps" class="wsub">0 reps</div><div id="wHint" class="wsub" style="margin-top:4px"></div></div></div>
+<p class="sub">Camera estimates for tracking change over time. Not a clinical-grade measurement.</p>
+</div>
+<script type="module" src="./app.js"></script>
+</body></html>
