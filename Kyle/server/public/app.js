@@ -8,6 +8,8 @@ const VISION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
 const MODEL_FULL =
   'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
+const HAND_MODEL =
+  'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const VIS_MIN = 0.5;
 const SMOOTH = 0.35;
 const HIP_H = 0.95; // hip height of the 3D model (m)
@@ -597,38 +599,134 @@ function animate() {
 // Camera + pose tracking
 // ============================================================
 let landmarker = null, delegateName = '', looping = false, lastVideoTime = -1, frames = 0, fpsT = 0, lastPanel = 0;
+let handLandmarker = null, handDelegate = '';
+// Per-hand live metrics, keyed by 'L' / 'R' (the person's own left/right).
+const HANDS = { L: null, R: null };
 const hud = () =>
   ($('hud').textContent = landmarker
-    ? `Pose: ${delegateName} · ${S.fps} fps · body ${S.bodyVisible ? 'detected ✓' : 'not detected'}`
+    ? `Pose: ${delegateName} · Hands: ${handLandmarker ? handDelegate : 'loading…'} · ${S.fps} fps · body ${S.bodyVisible ? 'detected ✓' : 'not detected'} · hands ${['L', 'R'].filter((k) => HANDS[k]).length}`
     : 'Pose model: loading…');
 
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+
+// Create a MediaPipe task, trying GPU first (except Safari), falling back to CPU.
+async function createTask(Task, vision, options) {
+  const make = (delegate) => Task.createFromOptions(vision, { ...options, baseOptions: { ...options.baseOptions, delegate } });
+  // Safari's GPU path is unreliable for MediaPipe, so use CPU there.
+  const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
+  if (!isSafari) {
+    try {
+      return [await withTimeout(make('GPU'), 20000), 'GPU'];
+    } catch (err) {
+      console.warn(`${Task.name || 'Task'} GPU failed, using CPU`, err);
+    }
+  }
+  return [await make('CPU'), 'CPU'];
+}
 
 async function initLandmarker() {
   hud();
   const mod = await import(VISION_URL);
   const vision = await mod.FilesetResolver.forVisionTasks(WASM_URL);
-  const make = (delegate) =>
-    mod.PoseLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: MODEL_FULL, delegate },
-      runningMode: 'VIDEO',
-      numPoses: 1
+  [landmarker, delegateName] = await createTask(mod.PoseLandmarker, vision, {
+    baseOptions: { modelAssetPath: MODEL_FULL },
+    runningMode: 'VIDEO',
+    numPoses: 1
+  });
+  hud();
+  // Hand model loads in the background; pose tracking works without it.
+  createTask(mod.HandLandmarker, vision, {
+    baseOptions: { modelAssetPath: HAND_MODEL },
+    runningMode: 'VIDEO',
+    numHands: 2,
+    minHandDetectionConfidence: 0.5,
+    minHandPresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5
+  })
+    .then(([h, d]) => {
+      handLandmarker = h;
+      handDelegate = d;
+      hud();
+    })
+    .catch((err) => {
+      console.warn('Hand landmarker failed to load', err);
+      handDelegate = 'unavailable';
     });
-  // Safari's GPU path is unreliable for MediaPipe, so use CPU there.
-  const isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
-  if (!isSafari) {
-    try {
-      landmarker = await withTimeout(make('GPU'), 20000);
-      delegateName = 'GPU';
-    } catch (err) {
-      console.warn('GPU pose model failed, using CPU', err);
+}
+
+// ---------- Hand metrics ----------
+const HAND_CONN = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]];
+const v3 = (a, b) => ({ x: b.x - a.x, y: b.y - a.y, z: b.z - a.z });
+const ang3 = (u, v) => {
+  const d = u.x * v.x + u.y * v.y + u.z * v.z;
+  const n = Math.hypot(u.x, u.y, u.z) * Math.hypot(v.x, v.y, v.z) || 1;
+  return (Math.acos(Math.max(-1, Math.min(1, d / n))) * 180) / Math.PI;
+};
+// Openness: average straightness of the 4 fingers (MCP→PIP→TIP), 0 = fist, 100 = flat open hand.
+function handOpenness(w) {
+  const fingers = [[5, 6, 8], [9, 10, 12], [13, 14, 16], [17, 18, 20]];
+  const bend = fingers.map(([m, p, t]) => ang3(v3(w[m], w[p]), v3(w[p], w[t])));
+  const avg = bend.reduce((a, b) => a + b, 0) / bend.length; // ~0° straight, ~100°+ curled
+  return Math.round(Math.max(0, Math.min(100, 100 - (avg / 100) * 100)));
+}
+// Wrist bend: angle between forearm (pose elbow→wrist) and hand (wrist→middle MCP), image space.
+function wristBend(poseLm, side, hand) {
+  if (!poseLm) return null;
+  const [el, wr] = side === 'L' ? [13, 15] : [14, 16];
+  if (vis(poseLm, el) < 0.5) return null;
+  const fore = { x: poseLm[wr].x - poseLm[el].x, y: poseLm[wr].y - poseLm[el].y, z: 0 };
+  const h = { x: hand[9].x - hand[0].x, y: hand[9].y - hand[0].y, z: 0 };
+  return Math.round(ang3(fore, h));
+}
+
+function processHands(res, poseLm, now) {
+  const seen = { L: false, R: false };
+  (res?.landmarks || []).forEach((lm, i) => {
+    // MediaPipe labels handedness for a mirrored (selfie) image, so 'Left' = person's left on an unmirrored webcam frame.
+    const label = res.handednesses?.[i]?.[0]?.categoryName;
+    const side = label === 'Left' ? 'R' : 'L';
+    const world = res.worldLandmarks?.[i] || lm;
+    const open = handOpenness(world);
+    const prev = HANDS[side];
+    HANDS[side] = {
+      lm,
+      open: prev ? Math.round(prev.open + (open - prev.open) * 0.4) : open,
+      wrist: wristBend(poseLm, side, lm),
+      t: now
+    };
+    seen[side] = true;
+  });
+  for (const k of ['L', 'R']) if (!seen[k] && HANDS[k] && now - HANDS[k].t > 400) HANDS[k] = null;
+}
+
+function renderHands() {
+  for (const k of ['L', 'R']) {
+    const h = HANDS[k];
+    $('hand' + k).textContent = h ? `${h.open}% open${h.wrist != null ? ` · ${h.wrist}°` : ''}${h.open < 25 ? ' (fist)' : ''}` : '--';
+  }
+}
+
+function drawHands() {
+  const w = overlay.width, h = overlay.height;
+  octx.lineWidth = Math.max(2, w / 400);
+  for (const k of ['L', 'R']) {
+    const hd = HANDS[k];
+    if (!hd) continue;
+    const lm = hd.lm;
+    octx.strokeStyle = k === 'L' ? '#a78bfa' : '#f472b6';
+    for (const [a, b] of HAND_CONN) {
+      octx.beginPath();
+      octx.moveTo(lm[a].x * w, lm[a].y * h);
+      octx.lineTo(lm[b].x * w, lm[b].y * h);
+      octx.stroke();
+    }
+    octx.fillStyle = '#fde68a';
+    for (const p of lm) {
+      octx.beginPath();
+      octx.arc(p.x * w, p.y * h, Math.max(2, w / 350), 0, Math.PI * 2);
+      octx.fill();
     }
   }
-  if (!landmarker) {
-    landmarker = await make('CPU');
-    delegateName = 'CPU';
-  }
-  hud();
 }
 
 const OVERLAY_CONN = [[11, 12], [11, 13], [13, 15], [15, 19], [12, 14], [14, 16], [16, 20], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [27, 31], [24, 26], [26, 28], [28, 32]];
@@ -697,6 +795,13 @@ function loop() {
   }
   frames++;
   const lm = res.landmarks?.[0], wl = res.worldLandmarks?.[0];
+  if (handLandmarker) {
+    try {
+      processHands(handLandmarker.detectForVideo(video, now + 0.001), lm, now);
+    } catch (err) {
+      console.warn('Hand tracking error', err);
+    }
+  }
   if (lm && wl) {
     processPose(lm, wl, now);
     if (S.follow) updatePose(lm, wl);
@@ -706,6 +811,8 @@ function loop() {
     octx.clearRect(0, 0, overlay.width, overlay.height);
     S.bodyVisible = false;
   }
+  drawHands();
+  renderHands();
 }
 
 // ============================================================
@@ -824,6 +931,7 @@ function finishTest() {
   hideBanner();
   showDiagnosis(report);
   focusAffected();
+  refreshExercises();
 }
 
 // Which muscles are likely involved, based on where each arm stopped.
@@ -1090,6 +1198,239 @@ async function analyze() {
 }
 window.__analyze = analyze;
 
+// ============================================================
+// Exercise alerts → Apple Watch (via ntfy on the iPhone)
+// ============================================================
+const EXERCISES = [
+  { id: 'wall_slides', name: 'Wall slides', dose: '2 × 10 slow reps', how: 'Back and forearms against a wall, slide your arms up overhead and back down.', targets: ['serratus_anterior', 'trapezius_lower', 'trapezius_upper'] },
+  { id: 'serratus_punch', name: 'Serratus punches', dose: '2 × 12 each arm', how: 'Lying on your back, reach your arm to the ceiling and push the shoulder blade up off the floor, then lower.', targets: ['serratus_anterior'] },
+  { id: 'prone_y', name: 'Prone Y raises', dose: '2 × 10', how: 'Face down, thumbs up, lift your arms into a Y and squeeze your lower shoulder blades.', targets: ['trapezius_lower', 'trapezius_middle', 'rhomboids'] },
+  { id: 'scaption', name: 'Scaption raises', dose: '2 × 10, light or no weight', how: 'Thumbs up, raise your arms slightly in front of your sides to shoulder height, lower slowly.', targets: ['supraspinatus', 'deltoid_middle', 'deltoid_anterior'] },
+  { id: 'side_ext_rot', name: 'Side-lying external rotation', dose: '2 × 12 each side', how: 'Lying on your side, elbow bent 90° against your ribs, rotate your forearm up toward the ceiling.', targets: ['infraspinatus', 'teres_minor'] },
+  { id: 'wall_walk', name: 'Wall finger walks', dose: '5 slow walks', how: 'Face a wall, walk your fingers up as high as is comfortable, hold 5 s, walk back down.', targets: ['deltoid_anterior', 'deltoid_middle', 'supraspinatus'] },
+  { id: 'pendulum', name: 'Pendulum swings', dose: '1 minute each arm', how: 'Lean on a table, let the arm hang loose and swing it in small circles.', targets: ['supraspinatus', 'deltoid_middle'] },
+  { id: 'doorway_stretch', name: 'Doorway chest stretch', dose: '3 × 30 s', how: 'Forearms on a doorframe at shoulder height, step through gently until you feel a chest stretch.', targets: ['pectoralis_major', 'pectoralis_minor'] },
+  { id: 'lat_stretch', name: 'Overhead lat stretch', dose: '3 × 30 s each side', how: 'Hold a doorframe overhead and sit your hips back and away to stretch the side of your back.', targets: ['latissimus_dorsi', 'teres_major'] },
+  { id: 'arm_circles', name: 'Arm circles', dose: '30 s forward, 30 s back', how: 'Arms out to the sides, start with small circles and make them bigger.', targets: ['deltoid_anterior', 'deltoid_middle', 'deltoid_posterior'] }
+];
+const exById = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
+
+function weakSide() {
+  const r = S.report;
+  if (!r) return '';
+  const { L: l, R: rr } = r.shoulder;
+  if (l && rr) return l.pct === rr.pct ? '' : l.pct < rr.pct ? 'Left' : 'Right';
+  return l ? 'Left' : rr ? 'Right' : '';
+}
+
+// Rank exercises by how much they target the muscles flagged on the weak side.
+function recommendedExercises() {
+  const side = weakSide();
+  const sides = side ? [side[0]] : ['L', 'R'];
+  return EXERCISES.map((e) => ({
+    e,
+    score: e.targets.reduce((s, id) => s + Math.max(...sides.map((sd) => S.findings[`${id}_${sd}`]?.score || 0)), 0)
+  }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.e);
+}
+
+function refreshExercises() {
+  const sel = $('exSelect');
+  const prev = sel.value;
+  const rec = recommendedExercises();
+  const opt = (e) => `<option value="${e.id}">${e.name} (${e.dose})</option>`;
+  sel.innerHTML =
+    (rec.length ? `<optgroup label="Recommended for you">${rec.map(opt).join('')}</optgroup>` : '') +
+    `<optgroup label="All exercises">${EXERCISES.filter((e) => !rec.includes(e)).map(opt).join('')}</optgroup>`;
+  sel.value = rec.length ? rec[0].id : prev || EXERCISES[0].id;
+  $('exSide').value = weakSide();
+  renderExPreview();
+}
+
+function buildAlert() {
+  const e = exById[$('exSelect').value];
+  const side = $('exSide').value;
+  const why = e.targets.map((id) => muscles.find((m) => m.def.id === id)?.def.name).filter(Boolean).slice(0, 2).join(' & ');
+  return {
+    title: `Exercise: ${e.name}${side ? ` (${side.toLowerCase()} side)` : ''}`,
+    message: `${e.dose}. ${e.how}${why ? ` Targets: ${why}.` : ''}`
+  };
+}
+
+function renderExPreview() {
+  const a = buildAlert();
+  $('exPreview').innerHTML = `Preview: <b style="color:#e5e7eb">${a.title}</b> · ${a.message}`;
+}
+
+function logAlert(entry) {
+  const el = $('alertLog');
+  const line = `${new Date(entry.at).toLocaleTimeString()} · ${entry.ok ? '✓ sent' : '✗ failed'}${entry.kind === 'reminder' ? ' (reminder)' : ''} · ${entry.title}${entry.error ? ` — ${entry.error}` : ''}`;
+  el.innerHTML = `<div class="${entry.ok ? 'ok' : 'bad'}">${line}</div>` + el.innerHTML;
+  while (el.children.length > 8) el.removeChild(el.lastChild);
+}
+
+async function postJSON(url, body, method = 'POST') {
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+  return j;
+}
+
+function renderReminder(rem) {
+  $('remindBtn').textContent = rem ? 'Stop reminders' : 'Start reminders';
+  $('remindBtn').classList.toggle('on', !!rem);
+  $('remindStatus').textContent = rem ? `every ${rem.intervalMin} min · next ${new Date(rem.nextAt).toLocaleTimeString()}` : '';
+}
+
+let reminderOn = false;
+$('sendExBtn').onclick = async () => {
+  const btn = $('sendExBtn');
+  btn.disabled = true;
+  try {
+    await postJSON('/alert', buildAlert()); // result is logged via the SSE 'alert' event
+  } catch (err) {
+    logAlert({ at: new Date().toISOString(), ok: false, title: buildAlert().title, error: err.message });
+  } finally {
+    btn.disabled = false;
+  }
+};
+$('remindBtn').onclick = async () => {
+  try {
+    if (reminderOn) {
+      await postJSON('/alert/reminder', null, 'DELETE');
+      reminderOn = false;
+      renderReminder(null);
+    } else {
+      const j = await postJSON('/alert/reminder', { ...buildAlert(), intervalMin: Number($('remindMin').value) });
+      reminderOn = true;
+      renderReminder(j.reminder);
+    }
+  } catch (err) {
+    $('remindStatus').textContent = `Error: ${err.message}`;
+  }
+};
+$('exSelect').onchange = renderExPreview;
+$('exSide').onchange = renderExPreview;
+$('alertSetupToggle').onclick = () => {
+  const el = $('alertSetup');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+events.addEventListener('alert', (e) => logAlert(JSON.parse(e.data)));
+
+fetch('/alert/config')
+  .then((r) => r.json())
+  .then((c) => {
+    $('ntfyTopic').textContent = c.topic;
+    reminderOn = !!c.reminder;
+    renderReminder(c.reminder);
+    c.log.slice().reverse().forEach(logAlert);
+    if (!c.log.length) $('alertSetup').style.display = 'block'; // show setup until the first alert is sent
+  })
+  .catch(() => ($('ntfyTopic').textContent = 'unavailable (is the server running?)'));
+refreshExercises();
+
+// ============================================================
+// Watch app simulator (mirrors Kyle/watch-app on the real watch)
+// ============================================================
+const W = { screen: 'idle', active: null, timer: null };
+const fmtDur = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+
+function wsShow(name) {
+  W.screen = name;
+  document.querySelectorAll('#watchScreen .ws').forEach((el) => el.classList.toggle('active', el.dataset.screen === name));
+}
+
+function wsTick() {
+  const now = new Date();
+  $('wsClock').textContent = `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (W.active) {
+    $('wsTimer').textContent = fmtDur((Date.now() - Date.parse(W.active.startedAt)) / 1000);
+  }
+}
+setInterval(wsTick, 500);
+wsTick();
+
+function wsNotify(p) {
+  if (W.active) return; // don't interrupt a recording
+  $('wsNTitle').textContent = p.title;
+  $('wsNBody').textContent = p.message;
+  wsShow('notify');
+}
+
+function wsStarted(info) {
+  W.active = info;
+  W.samples = 0;
+  $('wsExercise').textContent = info.exercise;
+  $('wsSamples').textContent = '0';
+  wsShow('recording');
+  $('status').textContent = `Session started from the ${info.startedBy} — recording watch motion${window.__camStream ? ' and camera' : ''}.`;
+  // camera analysis runs too if the camera is already on (browsers need a click to turn it on)
+  if (window.__camStream && S.test.phase === 'idle') analyze();
+}
+
+function wsStopped(sum) {
+  W.active = null;
+  $('wsSumTime').textContent = fmtDur(sum.durationSec);
+  $('wsSumHR').textContent = sum.avgHeartRate ? `${sum.avgHeartRate} bpm` : '--';
+  $('wsSumPeak').textContent = `${sum.peakAccel.toFixed(2)} g`;
+  $('wsSumN').textContent = String(sum.samples);
+  wsShow('summary');
+  $('status').textContent = `Session saved: ${fmtDur(sum.durationSec)}, ${sum.samples} watch samples (stopped from the ${sum.stoppedBy}).`;
+}
+
+document.querySelectorAll('#watchScreen [data-act]').forEach((b) => {
+  b.addEventListener('click', async () => {
+    const act = b.dataset.act;
+    try {
+      if (act === 'start') {
+        const ex = W.screen === 'notify' ? $('wsNTitle').textContent.replace(/^Exercise:\s*/, '') : 'Mobility session';
+        await postJSON('/session/start', { by: 'watch', exercise: ex });
+      } else if (act === 'stop') {
+        await postJSON('/session/stop', { by: 'watch' });
+      } else {
+        wsShow('idle');
+      }
+    } catch (err) {
+      $('status').textContent = `Watch: ${err.message}`;
+    }
+  });
+});
+
+$('wsPromptBtn').onclick = async () => {
+  try {
+    await postJSON('/alert', buildAlert());
+  } catch {
+    /* ntfy may fail offline; the watch prompt is still queued and shown via SSE */
+  }
+};
+
+events.addEventListener('prompt', (e) => wsNotify(JSON.parse(e.data)));
+events.addEventListener('session', (e) => {
+  const d = JSON.parse(e.data);
+  if (d.state === 'started') wsStarted(d.session);
+  else wsStopped(d.session);
+});
+events.addEventListener('motion', (e) => {
+  if (!W.active) return;
+  const m = JSON.parse(e.data);
+  if (m.sessionId !== W.active.id) return;
+  W.samples += 1;
+  $('wsSamples').textContent = String(W.samples);
+  if (m.heartRate) $('wsHR').textContent = Math.round(m.heartRate);
+  $('wsMotion').textContent = `${Math.hypot(m.accel.x, m.accel.y, m.accel.z).toFixed(2)} g`;
+});
+
+fetch('/session')
+  .then((r) => r.json())
+  .then((s) => (s.active ? wsStarted(s.active) : wsShow('idle')))
+  .catch(() => wsShow('idle'));
+fetch('/watch/info')
+  .then((r) => r.json())
+  .then((i) => ($('wsLan').textContent = i.lanUrls[0] || 'no Wi-Fi address found'))
+  .catch(() => {});
+
 function resetSession() {
   for (const k of Object.keys(JOINTS)) {
     S.cur[k] = null;
@@ -1104,6 +1445,7 @@ function resetSession() {
   applyFindings();
   $('result').style.display = 'none';
   renderPanels();
+  if (typeof refreshExercises === 'function' && $('exSelect').options.length) refreshExercises();
 }
 $('resetBtn').onclick = resetSession;
 $('heightInput').addEventListener('input', renderPanels);

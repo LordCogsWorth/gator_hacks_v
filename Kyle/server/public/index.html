@@ -54,6 +54,37 @@
       canvas.spark { width:100%; height:60px; background:#020617; border:1px solid var(--border); border-radius:8px; margin-top:6px; }
       #findings p { margin:4px 0; font-size:13px; }
     </style>
+    <style>
+      .layout { display:grid; grid-template-columns: minmax(0,1fr) 290px; gap:12px; align-items:start; }
+      .watchSide { position:sticky; top:12px; margin-top:12px; }
+      @media (max-width: 1200px) { .layout { grid-template-columns: 1fr; } .watchSide { position:static; } }
+      .watch { position:relative; width:212px; margin:14px auto 0; }
+      .watchCase { background:linear-gradient(145deg,#2b2f36,#0d0f12); border-radius:52px; padding:12px; box-shadow:0 0 0 2px #3a3f47, 0 12px 30px rgba(0,0,0,.6); }
+      .crown { position:absolute; right:-9px; top:62px; width:10px; height:34px; border-radius:4px; background:linear-gradient(90deg,#555,#999); }
+      .screen { background:#000; border-radius:42px; height:236px; overflow:hidden; position:relative; font-family:-apple-system,system-ui,sans-serif; color:#fff; }
+      .ws { position:absolute; inset:0; padding:16px 14px; display:none; flex-direction:column; gap:5px; overflow-y:auto; }
+      .ws.active { display:flex; animation:wsIn .25s ease-out; }
+      @keyframes wsIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+      .wsTime { font-size:34px; font-weight:600; text-align:center; margin-top:6px; }
+      .wsApp { text-align:center; color:#7dd3fc; font-weight:700; font-size:14px; }
+      .wsSub { text-align:center; color:#9ca3af; font-size:11px; margin-bottom:4px; }
+      .wsNotifHead { display:flex; align-items:center; gap:6px; font-size:10px; color:#9ca3af; font-weight:600; }
+      .wsNotifHead .wsNow { margin-left:auto; }
+      .appIcon { width:18px; height:18px; border-radius:50%; background:#0369a1; display:inline-flex; align-items:center; justify-content:center; font-size:10px; }
+      .wsTitle { font-size:15px; font-weight:700; line-height:1.2; }
+      .wsBody { font-size:11.5px; color:#d1d5db; line-height:1.3; }
+      .wsRec { font-size:12px; color:#f87171; font-weight:700; display:flex; align-items:center; gap:6px; }
+      .wsRec .dot { width:8px; height:8px; border-radius:50%; background:#ef4444; animation:blink 1s infinite; }
+      @keyframes blink { 50% { opacity:.2; } }
+      .wsExercise { font-size:13px; font-weight:600; color:#7dd3fc; }
+      .wsBig { font-size:34px; font-weight:700; color:#f87171; }
+      .wsBig small { font-size:11px; color:#9ca3af; }
+      .wsMetric { display:flex; justify-content:space-between; font-size:12px; color:#d1d5db; }
+      .wbtn { width:100%; border:none; border-radius:22px; padding:9px; font-size:14px; font-weight:700; margin-top:4px; color:#fff; }
+      .wbtn.green { background:#16a34a; color:#fff; }
+      .wbtn.red { background:#dc2626; }
+      .wbtn.gray { background:#374151; }
+    </style>
   </head>
   <body>
     <div class="wrap">
@@ -70,9 +101,10 @@
       </header>
       <div id="status" class="sub mono" style="margin-top:6px">Click “Analyze”: it turns on the camera, starts tracking your body, reads your watch, then runs the arm-raise test.</div>
 
+      <div class="layout"><div class="content">
       <div class="main">
         <div class="card">
-          <div class="row"><span class="label">Live camera · pose tracking</span><span id="hud" class="mono sub">Pose model: not loaded</span></div>
+          <div class="row"><span class="label">Live camera · pose + hand tracking</span><span id="hud" class="mono sub">Pose model: not loaded</span></div>
           <div class="stage">
             <video id="video" playsinline muted autoplay></video>
             <canvas id="overlay"></canvas>
@@ -139,6 +171,8 @@
           <div class="stat" style="margin-top:6px"><span>Arm speed (camera)</span><span id="camSpeed" class="mono">--</span></div>
           <div class="stat"><span>Peak arm speed</span><span id="camPeak" class="mono">--</span></div>
           <div class="stat"><span>Best arm raise</span><span id="armPeak" class="mono">--</span></div>
+          <div class="stat"><span>Left hand (open · wrist)</span><span id="handL" class="mono">--</span></div>
+          <div class="stat"><span>Right hand (open · wrist)</span><span id="handR" class="mono">--</span></div>
           <div class="stat"><span>Height</span><span id="heightOut" class="mono">--</span></div>
           <canvas id="accelChart" class="spark" width="400" height="60"></canvas>
           <div class="sub">Watch acceleration (g)</div>
@@ -157,6 +191,95 @@
         <div id="findings" style="margin-top:6px"><p class="sub">Click Analyze and raise both arms to find weak muscles.</p></div>
         <p class="sub" style="margin-top:8px">Estimates from one camera — not a medical diagnosis.</p>
       </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row">
+          <span class="label">Send exercise to Apple Watch</span>
+          <span id="alertSetupToggle" class="sub" style="cursor:pointer;text-decoration:underline">One-time setup</span>
+        </div>
+        <div id="alertSetup" class="sub" style="display:none;margin-top:8px;line-height:1.6">
+          1. On your iPhone, install <b>ntfy</b> from the App Store (free).<br />
+          2. In ntfy tap <b>+</b>, enter this topic and tap Subscribe: <code id="ntfyTopic" class="mono" style="color:#e5e7eb;background:#0b1220;padding:2px 6px;border-radius:6px;user-select:all">loading…</code><br />
+          3. Allow notifications when iOS asks.<br />
+          4. On iPhone open the <b>Watch</b> app → Notifications → ntfy → <b>Mirror my iPhone</b>.<br />
+          Alerts appear on the watch when your iPhone is locked and the watch is on your wrist.
+          Keep the topic private: anyone who knows it can read these alerts.
+        </div>
+        <div class="row" style="margin-top:10px;justify-content:flex-start">
+          <select id="exSelect" style="background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:8px;padding:7px 10px;font-size:13px;min-width:260px"></select>
+          <select id="exSide" style="background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:8px;padding:7px 10px;font-size:13px">
+            <option value="">Both sides</option>
+            <option value="Left">Left side</option>
+            <option value="Right">Right side</option>
+          </select>
+          <button id="sendExBtn" class="on">⌚ Send to watch now</button>
+        </div>
+        <div id="exPreview" class="sub" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:10px;justify-content:flex-start">
+          <span class="sub">Remind me every</span>
+          <input id="remindMin" type="number" min="1" max="240" value="30" style="width:70px" />
+          <span class="sub">minutes</span>
+          <button id="remindBtn">Start reminders</button>
+          <span id="remindStatus" class="mono sub"></span>
+        </div>
+        <div id="alertLog" class="mono sub" style="margin-top:10px"></div>
+      </div>
+      </div><!-- /content -->
+
+      <aside class="watchSide">
+        <div class="card">
+          <div class="row"><span class="label">Watch app · live preview</span><span id="wsMode" class="mono sub">simulator</span></div>
+          <div class="watch">
+            <div class="crown"></div>
+            <div class="watchCase">
+              <div id="watchScreen" class="screen">
+                <!-- idle -->
+                <div class="ws" data-screen="idle">
+                  <div class="wsTime" id="wsClock">10:09</div>
+                  <div class="wsApp">Mobility Lab</div>
+                  <div class="wsSub" id="wsIdleSub">Waiting for an exercise prompt…</div>
+                  <button class="wbtn green" data-act="start">Start session</button>
+                </div>
+                <!-- notification -->
+                <div class="ws" data-screen="notify">
+                  <div class="wsNotifHead"><span class="appIcon">💪</span><span>MOBILITY LAB</span><span class="wsNow">now</span></div>
+                  <div class="wsTitle" id="wsNTitle">Time for your exercise</div>
+                  <div class="wsBody" id="wsNBody"></div>
+                  <button class="wbtn green" data-act="start">Start session</button>
+                  <button class="wbtn gray" data-act="dismiss">Dismiss</button>
+                </div>
+                <!-- recording -->
+                <div class="ws" data-screen="recording">
+                  <div class="wsRec"><span class="dot"></span> REC <span id="wsTimer" class="mono">0:00</span></div>
+                  <div class="wsExercise" id="wsExercise">Mobility session</div>
+                  <div class="wsBig"><span id="wsHR">--</span><small> ♥ BPM</small></div>
+                  <div class="wsMetric">Motion <span id="wsMotion" class="mono">0.00 g</span></div>
+                  <div class="wsMetric">Samples <span id="wsSamples" class="mono">0</span></div>
+                  <button class="wbtn red" data-act="stop">Stop</button>
+                </div>
+                <!-- summary -->
+                <div class="ws" data-screen="summary">
+                  <div class="wsTitle">Session saved ✓</div>
+                  <div class="wsMetric">Time <span id="wsSumTime" class="mono">0:00</span></div>
+                  <div class="wsMetric">Avg HR <span id="wsSumHR" class="mono">--</span></div>
+                  <div class="wsMetric">Peak motion <span id="wsSumPeak" class="mono">--</span></div>
+                  <div class="wsMetric">Samples <span id="wsSumN" class="mono">0</span></div>
+                  <button class="wbtn gray" data-act="done">Done</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="sub" style="margin-top:10px">
+            This preview mirrors the real watch app (<code>Kyle/watch-app</code>). Taps here and on the watch both go to the
+            same server, so starting on either one starts the session everywhere.
+          </p>
+          <div class="row" style="justify-content:flex-start;margin-top:6px">
+            <button id="wsPromptBtn">Send prompt to watch</button>
+          </div>
+          <div class="sub" style="margin-top:8px">Watch app server URL: <span id="wsLan" class="mono" style="color:#e5e7eb">…</span></div>
+        </div>
+      </aside>
+      </div><!-- /layout -->
     </div>
 
     <script>
