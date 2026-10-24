@@ -11,8 +11,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getApprovedPlan, getPatients, postSession, uploadReplay } from '../api';
-import { releaseCamera, startExercise } from '../camera/mockCamera';
-import type { ExerciseControl, ExerciseResult, LiveFrame, ReplayFile } from '../camera/types';
+import { releaseCamera, startExercise, type ExerciseControl, type LiveFrame } from '../camera/mockCamera';
+import type { ExerciseResult, ReplayFile } from '../types';
 import { usePolling } from '../usePolling';
 import type { Alert, Exercise, PatientSummary, Plan, PlanExercise, SessionUploadResponse, Side } from '../types';
 import { EXERCISE_LABELS, TARGET_UNITS } from '../types';

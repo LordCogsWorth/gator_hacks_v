@@ -1,9 +1,64 @@
-/** Shared data shapes — keep in sync with Raghav/docs/CONTRACTS.md and the API. */
+/**
+ * Shared data shapes for the whole web app (care area + patient area): the one
+ * source of truth. Field names match the API (camelCase) and
+ * Raghav/docs/CONTRACTS.md. The camera contract itself is in camera/types.ts.
+ */
 
-import type { BodySide, Exercise, ExerciseResult as CameraExerciseResult, Side } from './camera/types';
+// §1 Shared names
+export type Exercise = 'arm_raise' | 'forward_reach' | 'hand_open';
+/** Which arm a result is for. */
+export type Side = 'weak' | 'healthy';
+/** The patient's body side ("left" / "right" are the patient's own sides). */
+export type BodySide = 'left' | 'right';
 
-// Camera-contract names live in camera/types.ts (CONTRACTS.md §1–4); re-exported here.
-export type { BodySide, Exercise, ReplayFile, Side } from './camera/types';
+/**
+ * §3 ExerciseResult: one per exercise per arm. The patient app builds it from
+ * camera frames (patient/session/repCounter.ts); `id` / `sessionId` are filled
+ * in by the API once saved.
+ */
+export interface ExerciseResult {
+  id?: string;
+  sessionId?: string;
+  exercise: Exercise;
+  side: Side;
+  bestValue: number; // best angle (degrees) or hand opening (%)
+  reps: number;
+  secPerRep: number;
+  smoothness: number; // speed bursts per rep; lower = smoother
+  fatigue: number; // last 3 reps avg / first 3 reps avg (1.0 = no drop)
+  trunkLeanMax: number; // degrees from vertical
+  shoulderHikeMax: number; // active shoulder height above the other shoulder, in metres
+  compRepPct: number; // % of reps where lean or hike passed the threshold (0–100)
+}
+
+// §4 ReplayFile: 3D skeleton recording of one exercise + side, built by the patient app.
+export type ReplayWarningType = 'lean' | 'shoulder_hike';
+
+export interface ReplayFile {
+  fps: 15;
+  exercise: Exercise;
+  side: Side;
+  joints: string[]; // order of joints in every frame (REPLAY_JOINTS)
+  frames: [number, number, number][][]; // frames[f][j] = [x, y, z] in metres, hip-centred
+  warnings?: { frame: number; type: ReplayWarningType }[];
+}
+
+/** Joint order in every ReplayFile frame (MediaPipe Pose index in the comment). */
+export const REPLAY_JOINTS = [
+  'nose', // 0
+  'left_shoulder', // 11
+  'right_shoulder', // 12
+  'left_elbow', // 13
+  'right_elbow', // 14
+  'left_wrist', // 15
+  'right_wrist', // 16
+  'left_hip', // 23
+  'right_hip', // 24
+  'left_knee', // 25
+  'right_knee', // 26
+  'left_ankle', // 27
+  'right_ankle', // 28
+] as const;
 
 export type PlanStatus = 'suggested' | 'approved' | 'superseded' | 'dismissed';
 export type PlanKind = 'phase-up' | 'plateau' | 'compensation';
@@ -82,12 +137,6 @@ export interface ApiConfig {
   alertCooldownHours: number;
 }
 
-/** An ExerciseResult as the API returns it (ids filled in once saved). */
-export interface ExerciseResult extends CameraExerciseResult {
-  id?: string;
-  sessionId?: string;
-}
-
 export interface Session {
   id: string;
   patientId: string;
@@ -113,7 +162,7 @@ export interface SessionUploadBody {
   endedAt: string | number;
   pain?: number | null;
   tiredness?: number | null;
-  results: CameraExerciseResult[];
+  results: ExerciseResult[];
 }
 
 /** Response of POST /sessions. */

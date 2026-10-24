@@ -21,18 +21,27 @@
  *     The numbers are always simulated. No camera (denied, http on LAN) → values still flow.
  */
 
-import type {
-  BodySide,
-  Exercise,
-  ExerciseControl,
-  ExerciseResult,
-  LiveFrame,
-  ReplayFile,
-  ReplayWarningType,
-  Side,
-  StartExercise,
-} from './types';
-import { REPLAY_JOINTS } from './types';
+import type { BodySide, Exercise, ExerciseResult, ReplayFile, ReplayWarningType, Side } from '../types';
+import { REPLAY_JOINTS } from '../types';
+
+// The old startExercise contract, kept only for this legacy mock.
+export interface LiveFrame {
+  value: number;
+  reps: number;
+  warning?: 'lean' | 'shoulder_hike' | 'not_visible';
+}
+
+export interface ExerciseControl {
+  stop(): ExerciseResult;
+  replay(): ReplayFile;
+}
+
+type StartExercise = (
+  video: HTMLVideoElement,
+  exercise: Exercise,
+  side: Side,
+  onFrame: (frame: LiveFrame) => void
+) => ExerciseControl;
 
 export interface MockCameraOptions {
   symmetryPct?: number;

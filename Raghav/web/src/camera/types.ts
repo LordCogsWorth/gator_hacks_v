@@ -1,74 +1,76 @@
 /**
- * Camera module contract — copied exactly from Raghav/docs/CONTRACTS.md §1–4.
- * Stuti owns this contract; if it changes there, change it here too.
+ * Camera module contract (Raghav/docs/CONTRACTS.md §2): the app only talks to a
+ * CameraTracker. Stuti's MediaPipe module implements it; fakeTracker.ts implements
+ * it with made-up motion. The tracker only reports per-frame measurements; the
+ * patient app counts reps and builds ExerciseResult / ReplayFile from the frames.
  */
+import type { BodySide, Exercise } from '../types';
 
-// §1 Shared names
-export type Exercise = 'arm_raise' | 'forward_reach' | 'hand_open';
-export type Side = 'weak' | 'healthy';
-export type BodySide = 'left' | 'right';
-
-// §2 Camera module
-export interface LiveFrame {
-  // emitted about 15 times per second
-  value: number; // angle in degrees, or hand opening %
-  reps: number; // reps counted so far
-  warning?: 'lean' | 'shoulder_hike' | 'not_visible';
+export interface PerSide<T> {
+  left: T;
+  right: T;
 }
 
-export interface ExerciseControl {
-  stop(): ExerciseResult; // ends the exercise and returns the summary
-  replay(): ReplayFile; // skeleton recording of this exercise
+/** Normalised image point: x and y in 0..1 of the (un-mirrored) video frame. */
+export interface Point2D {
+  x: number;
+  y: number;
+  visibility: number;
 }
 
-export type StartExercise = (
-  video: HTMLVideoElement,
-  exercise: Exercise,
-  side: Side,
-  onFrame: (frame: LiveFrame) => void
-) => ExerciseControl;
-
-// §3 ExerciseResult (one per exercise, per arm)
-export interface ExerciseResult {
-  exercise: Exercise;
-  side: Side;
-  bestValue: number; // best angle (degrees) or hand opening (%)
-  reps: number;
-  secPerRep: number;
-  smoothness: number; // speed bursts per rep; lower = smoother
-  fatigue: number; // last 3 reps avg / first 3 reps avg (1.0 = no drop)
-  trunkLeanMax: number; // degrees from vertical
-  shoulderHikeMax: number; // weak shoulder height above healthy shoulder, in metres
-  compRepPct: number; // % of reps where lean or hike passed the threshold (0–100)
+/**
+ * Estimated 3D joint position in metres (MediaPipe world landmarks): hip-centred,
+ * x toward the patient's left, y down, z negative toward the camera.
+ */
+export interface Joint3D {
+  x: number;
+  y: number;
+  z: number;
+  visibility: number;
 }
 
-// §4 ReplayFile (3D skeleton recording)
-export type ReplayWarningType = 'lean' | 'shoulder_hike';
+/**
+ * MediaPipe Pose indices of the 13 joints in joints2d / joints3d, in the same
+ * order as REPLAY_JOINTS (types.ts): nose, shoulders L/R, elbows L/R, wrists L/R,
+ * hips L/R, knees L/R, ankles L/R.
+ */
+export const MAIN_JOINTS = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28] as const;
 
-export interface ReplayFile {
-  fps: 15;
-  exercise: Exercise;
-  side: Side;
-  joints: string[]; // order of joints in every frame (REPLAY_JOINTS)
-  frames: [number, number, number][][]; // frames[f][j] = [x, y, z] in metres, hip-centred
-  warnings?: { frame: number; type: ReplayWarningType }[];
+/** One processed camera frame. Every number is already averaged over the last 5 frames, and
+ *  any value from a joint with confidence below 0.5 is null. "left"/"right" are the patient's sides. */
+export interface TrackingFrame {
+  /**
+   * Frame time in ms: performance.now() for a real tracker. Compare it only with
+   * other frame times (the fake tracker's demo speed-up runs a faster clock).
+   */
+  t: number;
+  visible: {
+    shoulders: PerSide<boolean>;
+    elbows: PerSide<boolean>;
+    wrists: PerSide<boolean>;
+  };
+  /** Degrees between the trunk line and the upper arm. 0 = arm down, 90 = straight out. */
+  shoulderAngle: PerSide<number | null>;
+  /** Degrees at the elbow. 180 = fully straight. */
+  elbowAngle: PerSide<number | null>;
+  /** Average fingertip-to-wrist distance ÷ palm size, as 0..100%. Null if the hand isn't found. */
+  handOpening: PerSide<number | null>;
+  /** Shoulder–hip line angle from vertical, degrees. */
+  trunkLeanDeg: number | null;
+  /** How much the active shoulder is raised above the other, as a fraction of shoulder width. */
+  shoulderHike: number | null;
+  /** MAIN_JOINTS in image space, for drawing the skeleton on the video. */
+  joints2d: Point2D[] | null;
+  /** MAIN_JOINTS in metres, for the care team's 3D replay. */
+  joints3d: Joint3D[] | null;
 }
 
-/** Joint order in every ReplayFile frame (MediaPipe Pose index in the comment). */
-export const REPLAY_JOINTS = [
-  'nose', // 0
-  'left_shoulder', // 11
-  'right_shoulder', // 12
-  'left_elbow', // 13
-  'right_elbow', // 14
-  'left_wrist', // 15
-  'right_wrist', // 16
-  'left_hip', // 23
-  'right_hip', // 24
-  'left_knee', // 25
-  'right_knee', // 26
-  'left_ankle', // 27
-  'right_ankle', // 28
-] as const;
-
-export type ReplayJoint = (typeof REPLAY_JOINTS)[number];
+export interface CameraTracker {
+  /** Begin tracking the given (already playing) video element. */
+  start(video: HTMLVideoElement): Promise<void>;
+  stop(): void;
+  /** Which exercise and which arm is being done right now (e.g. to switch on the hand model). */
+  configure(opts: { exercise: Exercise; activeSide: BodySide }): void;
+  /** Called for every processed frame. Returns an unsubscribe function. */
+  onFrame(cb: (frame: TrackingFrame) => void): () => void;
+}
