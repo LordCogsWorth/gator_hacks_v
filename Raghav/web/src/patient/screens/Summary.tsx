@@ -90,7 +90,7 @@ export function Summary() {
 
 function sentence(ex: Exercise, today: number, before: number | null) {
   const what = ex === 'hand_open' ? 'Your weak hand opened' : 'Your weak arm reached';
-  const base = `${what} ${today}% of your healthy ${ex === 'hand_open' ? 'hand' : 'arm'}`;
+  const base = `${what} ${today}% of your stronger ${ex === 'hand_open' ? 'hand' : 'arm'}`;
   if (before === null) return `${base}.`;
   if (today > before) return `${base} — up from ${before}% last week.`;
   if (today === before) return `${base} — same as last week.`;
