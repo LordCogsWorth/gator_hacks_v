@@ -1,9 +1,9 @@
 # RehabTrack — Raghav (API + care-team dashboard)
 
-This folder is the **shared backend** everyone else calls, plus the **care-team dashboard**.
+This folder is the **shared backend** everyone else calls, plus the **web app**: the care-team dashboard and the patient app (Lucas's, moved here from `leonardo/patient-app`).
 
 - `api/` — Node + Express. Port **8081**. JSON-file storage. Mountable later into Kyle’s server at `/api`.
-- `web/` — React care-team dashboard. Port **5173**.
+- `web/` — one React app on port **5173** with two areas: care dashboard at `/care`, patient app at `/patient`. They share one API client (`src/api.ts`), one set of types (`src/types.ts`) and one camera layer (`src/camera/`).
 - `docs/` — project brief and shared contracts (read these first).
 - `api/API.md` — **give this file to Lucas** so his coding agent knows exact endpoints.
 
@@ -38,7 +38,7 @@ Seed is safe to re-run anytime: it resets demo data (Maria / James / Priya). See
 
 `npm test` runs the rules-engine unit tests and HTTP route tests against a temporary data folder (`REHAB_DATA_DIR`), so it never touches `api/data/`.
 
-## 2. Install and run the care-team dashboard
+## 2. Install and run the web app (care dashboard + patient app)
 
 In a **second** terminal:
 
@@ -48,11 +48,15 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**
+| URL | What |
+| --- | --- |
+| http://localhost:5173/care | Care-team dashboard (`/` redirects here; old `/patients/:id` links still work) |
+| http://localhost:5173/patient | Patient app. First visit asks "Who are you?" (remembered); `?as=p-james` picks a patient directly |
+| http://localhost:5173/patient?demo=1 | Patient app with the **Demo controls** panel (remembered for the browser tab; `?demo=0` turns it off) |
 
-From another laptop or phone on the same Wi‑Fi, use `npm run dev:lan` (`vite --host`) and open the LAN URL Vite prints (e.g. `http://192.168.x.x:5173`). Point `VITE_API_BASE` at the API’s LAN URL if needed.
+From another laptop or phone on the same Wi‑Fi, use `npm run dev:lan` (`vite --host`) and open the LAN URL Vite prints (e.g. `http://192.168.x.x:5173`). Point `VITE_API_BASE` at the API’s LAN URL if needed. The patient app's webcam only works on `localhost` (browsers block cameras on plain-http LAN addresses); the fake tracker's numbers flow either way.
 
-You should see a patient list with James and Priya flagged first, then Maria. Click a name for alerts, the suggested plan (review, edit, Approve / Dismiss), and charts. Both pages refresh every 5 seconds while the tab is visible.
+On `/care` you should see a patient list with James and Priya flagged first, then Maria. Click a name for alerts, the suggested plan (review, edit, Approve / Dismiss), and charts. Both pages refresh every 5 seconds while the tab is visible. The header's **Patient app** link opens the patient app as the patient on screen.
 
 Optional: copy `.env.example` to `.env` if the API is not on `http://localhost:8081/api`.
 
@@ -74,44 +78,42 @@ Simulate the patient app uploading a good and a bad session for Maria:
 bash Raghav/api/simulate-lucas.sh            # or: bash Raghav/api/simulate-lucas.sh http://<LAN-IP>:8081/api
 ```
 
-## 4. Demo patient view (stand-in for Lucas's app)
+## 4. Patient app (`/patient`)
 
-Until Lucas's app and Stuti's camera module are in the repo, the dashboard has a **demo patient view** at `/patient/:id` that runs the patient side of the loop with a mock camera. It is a fallback and a reference implementation, labelled "Demo patient view"; it is not a replacement for Lucas's app.
+Lucas's app, backed by the API (no fake data, no login):
 
-With the API (`npm start` in `Raghav/api`) and dashboard (`npm run dev` in `Raghav/web`) running, open **http://localhost:5173/patient/p-maria**, or click the small **Demo patient view** link in the dashboard header (from a patient's page it opens that patient).
+- **Who:** `?as=<patientId>` or the "Who are you?" picker; remembered in localStorage. Settings → **Switch patient (demo)**.
+- **Dashboard:** streak, sessions this week, weaker-arm % vs last week, next check-in, coach avatar, today's plan with reps and goals (`GET /patients/:id/plan`; "No plan yet" on 404), care team, progress chart, recent sessions. Polls every 5 s: after the care team approves a plan, **New plan from your care team** appears with the new targets.
+- **Session:** check-in (pain 0–10, tiredness) → for each exercise: coach explains → camera setup → stronger arm → weaker arm (goal line = stronger arm's best), voice rep count, lean / shoulder-hike warnings → summary ("up from X% last week") → saved with `POST /sessions` + one replay per round.
+- **Safety stop:** pain 7+ at check-in or "I feel dizzy or unwell" ends the session and still uploads it with `stopReason`, so the care team gets a **Safety stop** alert.
+- **History, Messages, Settings:** history comes from the API. Messages (with a demo auto-reply), physicians and phone/gender are **demo-only** in localStorage (`src/patient/localDemo.ts`); the name comes from the API.
+- **Demo controls** (`?demo=1`, bottom of every screen): simulated symmetry (defaults to the patient's latest), simulated compensation (over 50% of weak-arm reps raises an alert), **Speed up demo** (on by default; ≈ 1 minute per session plus the three "I'm ready" clicks).
 
-- Home shows today's approved plan (`GET /patients/:id/plan`) and the next check-in; "No plan yet" if there's no approved plan.
-- **Start today's session** runs each plan exercise, stronger arm then weaker arm: live value, rep counter, warning banner on lean / shoulder hike, Stop / Next. Then pain (0–10) and tiredness (1–5), then it saves the session and uploads one 3D replay per step.
-- **Demo controls** (collapsible, bottom): patient picker, simulated symmetry (defaults to the patient's latest), simulated compensation (over 50% of weak-arm reps raises an alert), and **Speed up demo** (on by default; ≈ 30 s per session).
-- While the page is open it checks the plan every 5 s and shows **New plan from your care team** after an approval.
-- The webcam preview only works on `localhost` (browsers block cameras on plain-http LAN addresses); without it the numbers still flow.
-
-Code: `web/src/pages/PatientDemo.tsx`, mock camera `web/src/camera/mockCamera.ts` (same signature as Stuti's module, so hers can replace it), types `web/src/camera/types.ts`.
+Camera: the app talks to a `CameraTracker` (`src/camera/types.ts`, CONTRACTS.md §2). `src/camera/index.ts` picks the fake tracker today; swapping in Stuti's is one line. The app counts reps and builds `ExerciseResult` and `ReplayFile` itself (`src/patient/session/repCounter.ts`, `screens/SessionRun.tsx`).
 
 ## 5. 60-second demo click-path
 
-Seed first (`npm run seed` in `Raghav/api`), keep the API running, and open two browser windows side by side: the dashboard at `http://localhost:5173` and the patient view at `http://localhost:5173/patient/p-maria`. Both must stay visible: polling pauses in hidden tabs.
+Seed first (`npm run seed` in `Raghav/api`), keep the API running, and open two browser windows side by side: the dashboard at `http://localhost:5173/care` and the patient app at `http://localhost:5173/patient?as=p-maria&demo=1`. Both must stay visible: polling pauses in hidden tabs.
 
 1. **Dashboard (10 s):** James and Priya are flagged first. Open **Maria**: symmetry rising toward the phase target, a suggested "Ready for next phase" plan with its reason.
-2. **Patient (25 s):** in Maria's view, click **Start today's session** (Speed up demo on). Point out the live value and reps, healthy arm first, then the weak arm aiming at that mark. Pick pain and tiredness, **Save my session**: "Session saved", symmetry per exercise, 6 of 6 recordings sent.
+2. **Patient (35 s):** on Maria's dashboard click **Start session**, pick a tiredness, **Next**, then **I'm ready, let's start** for each exercise (Speed up demo is on). Point out the coach, the stronger arm setting the goal line, the weaker arm aiming at it, and the reps. The summary says "Your weak arm reached 72% of your healthy arm — up from 63% last week" and "✓ Sent to your care team".
 3. **Dashboard (5 s):** within 5 s Maria's charts gain today's point.
-4. **Approve (10 s):** on Maria's dashboard click **Approve plan** (edit a target or the check-in date first if you like).
-5. **Patient (5 s):** within 5 s the patient view shows **New plan from your care team** with phase 3 and the new targets.
+4. **Approve (5 s):** on Maria's dashboard click **Approve plan** (edit a target or the check-in date first if you like).
+5. **Patient (5 s):** within 5 s the patient dashboard shows **New plan from your care team** with phase 3 and the new goals.
 
-Optional compensation beat: switch the patient view to **Priya** (Demo controls → Patient), set compensation to 70%, and run a session. Her compensation alert is already open from the seed, so no duplicate is raised ("No new alerts"). Acknowledge it on her dashboard, run another 70% session, and a new compensation alert appears (newer data after the acknowledgement overrides the 72 h cooldown).
+Optional beats:
+
+- **Compensation:** open `/patient?as=p-priya&demo=1`, set Demo controls → compensation to 70%, run a session. Her compensation alert is already open from the seed, so no duplicate is raised. Acknowledge it on her dashboard, run another 70% session, and a new compensation alert appears (newer data after the acknowledgement overrides the 72 h cooldown).
+- **Safety stop:** open `/patient?as=p-james`, **Start session**, set pain to 8, **Next**: the app stops ("Your care team has been told") and James gets **Safety stop** and **Pain** alerts on `/care`.
 
 Re-seed before the real demo to reset everything.
 
 ## What Lucas needs
 
-1. This repo (or at least `Raghav/api/API.md` + `Raghav/docs/CONTRACTS.md`).
-2. Your API running on port 8081 (or your laptop’s Wi‑Fi IP instead of `localhost`).
+1. His app now lives in `Raghav/web/src/patient/**` (he owns that folder; see `AGENTS.md` for the shared files Raghav owns).
+2. The API running on port 8081 (or the laptop’s Wi‑Fi IP instead of `localhost`).
 3. Demo patient ids: `p-maria`, `p-james`, `p-priya`.
-4. His app should call:
-   - `GET /api/patients/:id/plan` for today’s approved plan
-   - `POST /api/sessions` after each session
-   - `POST /api/sessions/:id/replay` once per exercise + side (optional; the camera module's `replay()` output)
-5. A working reference: the demo patient view above (`web/src/pages/PatientDemo.tsx`).
+4. Endpoints the app uses (`Raghav/api/API.md`): `GET /patients/:id`, `GET /patients/:id/plan`, `GET /patients/:id/sessions`, `POST /sessions` (with `stopReason` on a safety stop), `POST /sessions/:id/replay`.
 
 ## Demo patients (seed stories)
 

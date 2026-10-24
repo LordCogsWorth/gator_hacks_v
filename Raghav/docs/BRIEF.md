@@ -40,7 +40,7 @@ Recovery comes from the brain rewiring through lots of repetition (neuroplastici
 | Person | Owns | Folder |
 | --- | --- | --- |
 | Raghav | Backend API (shared by everyone) + care-team dashboard | `Raghav/` |
-| Lucas | Patient web app (calls Raghav's API over HTTP) | his own folder |
+| Lucas | Patient web app (calls Raghav's API over HTTP) | `Raghav/web/src/patient/` (moved from `leonardo/patient-app`) |
 | Stuti | Camera module: MediaPipe pose + hand tracking, angles, reps, compensation, 3D replay recording | `stuti/` |
 | Kyle | Watch app + Express watch server (already in `main/`), iPhone Shortcut, overall integration | `Kyle/`, `main/` |
 | Justin | Watch / iPhone data with Kyle | `justin/` |
@@ -102,6 +102,7 @@ Automatic: drafting a suggested plan, raising alerts, reminders, live form corre
 | compensation | Compensation in over 50% of reps |
 | adherence | 3 missed sessions in a row |
 | pain | Pain reported 7+ |
+| safety-stop | Patient stopped a session early (pain 7+ at check-in, or felt dizzy / unwell) |
 | heart-rate | Resting HR 10+ bpm above 2-week average |
 | blood-pressure | Systolic above the patient's limit |
 | fall | Any fall recorded |
@@ -113,8 +114,8 @@ Also suggest a same-phase change on a plateau (more reps, easier target on the w
 
 - **Kyle's Express server** (`main/server/index.js`, port 8080): watch ingest (`/ingest`, `/ingest/batch`), recording sessions, live stream (`/events`), watch alerts and prompts.
 - **Raghav's API** (`Raghav/api`, port 8081 during development): an `express.Router()` for patients, plans, sessions, results, watch daily data and alerts. JSON-file storage. Will be mounted into Kyle's server at `/api` when merging, so the project ends up with one backend.
-- **Care dashboard** (`Raghav/web`): React + Vite + TypeScript + Tailwind + Recharts (+ Three.js for replay).
-- **Patient app** (Lucas): separate web app; calls Raghav's API; embeds Stuti's camera module.
+- **Care dashboard** (`Raghav/web`, `/care` area): React + Vite + TypeScript + Tailwind + Recharts (+ Three.js for replay).
+- **Patient app** (Lucas): the `/patient` area of the same web app as the dashboard (`Raghav/web`); calls Raghav's API; uses Stuti's camera module through the `CameraTracker` contract.
 - All camera processing runs in the patient's browser; no video is uploaded, only numbers and skeleton recordings.
 
 There is no Supabase. Do not add another backend.

@@ -642,10 +642,11 @@ Seed dates are relative to today, so alerts and suggestions look the same whatev
 
 ## Quick start for Lucas
 
-1. Ask Raghav to run the API (`cd Raghav/api && npm install && npm run seed && npm start`).
-2. Point your app at `http://localhost:8081/api` (or Raghav’s Wi‑Fi IP).
-3. On home screen: `GET /patients/p-maria/plan` (or whichever patient you are demoing).
-4. After a session: `POST /sessions` with the body shape above (`Date.now()` is fine for `startedAt` / `endedAt`). On `400`, log `details`: it lists every bad field.
-5. Optional: for each exercise + side, `POST /sessions/:id/replay` with the `ReplayFile` the app built for that round (`Raghav/docs/CONTRACTS.md` §4).
-6. Working reference for steps 3–5: the dashboard's demo patient view (`Raghav/web/src/pages/PatientDemo.tsx`, open `http://localhost:5173/patient/p-maria`) driving the mock camera (`Raghav/web/src/camera/mockCamera.ts`).
-7. Do not invent extra fields — stick to this file and `Raghav/docs/CONTRACTS.md`.
+The patient app now lives in this repo: `Raghav/web/src/patient/**` (open `http://localhost:5173/patient`). Its data layer (`src/patient/api.ts`) already calls the endpoints below through the shared client `src/api.ts`.
+
+1. Run the API (`cd Raghav/api && npm install && npm run seed && npm start`).
+2. The app uses `http://localhost:8081/api` (or `VITE_API_BASE`).
+3. Home screen: `GET /patients/:id` (record), `GET /patients/:id/plan` (404 = no plan yet), `GET /patients/:id/sessions` (history, chart, streak, "up from X% last week"), polled every 5 s.
+4. After a session: `POST /sessions` (`Date.now()` or ISO is fine for `startedAt` / `endedAt`). On `400`, log `details`: it lists every bad field. A safety stop sends `stopReason` (results may be `[]`).
+5. Then, for each exercise + side, `POST /sessions/:id/replay` with the `ReplayFile` the app built for that round.
+6. Do not invent extra fields: stick to this file and `Raghav/docs/CONTRACTS.md`.
