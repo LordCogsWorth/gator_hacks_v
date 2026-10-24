@@ -1,12 +1,10 @@
 // Stock-style chart: one point per session showing how close the weak arm is to the healthy arm.
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps } from 'recharts';
 import { getCurrentPlan, getSessionSummaries } from '../api';
-import { BigButton } from '../components/Layout';
+import { Card } from './Layout';
 import { EXERCISES } from '../data/exercises';
 import type { ExerciseId } from '../types';
-import { useSpeakOnMount } from '../voice/useVoice';
 
 type View = 'average' | ExerciseId;
 
@@ -24,8 +22,8 @@ interface Point {
   value: number;
 }
 
-export function Progress() {
-  const navigate = useNavigate();
+/** Dashboard panel: the weak arm's % of the healthy arm, one point per session. */
+export function ProgressChart() {
   const [view, setView] = useState<View>('average');
   const summaries = getSessionSummaries();
 
@@ -42,47 +40,42 @@ export function Progress() {
   const label = view === 'average' ? 'All exercises' : EXERCISES[view].title;
   const yMin = Math.max(0, Math.floor((Math.min(...points.map((p) => p.value), 100) - 10) / 10) * 10);
 
-  useSpeakOnMount(
-    first && last
-      ? `Your progress. Your weaker arm went from ${first.value} percent to ${last.value} percent of your stronger arm.`
-      : 'Your progress. Finish a session to start your chart.',
-  );
-
   const views: View[] = ['average', ...getCurrentPlan().exercises.map((e) => e.name)];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-4xl font-extrabold">My progress</h1>
-
-      <div className="flex flex-wrap gap-3" role="group" aria-label="Choose exercise">
-        {views.map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            aria-pressed={view === v}
-            className={`min-h-[60px] rounded-2xl border-2 px-5 text-xl font-bold ${
-              view === v ? 'border-neutral-100 bg-neutral-100 text-neutral-950' : 'border-neutral-600 text-neutral-50'
-            }`}
-          >
-            {v === 'average' ? 'All exercises' : EXERCISES[v].title}
-          </button>
-        ))}
-      </div>
-
+    <Card
+      title="Your progress"
+      action={
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Choose exercise">
+          {views.map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              aria-pressed={view === v}
+              className={`min-h-[48px] rounded-xl border px-4 text-base font-medium ${
+                view === v ? 'border-neutral-100 bg-neutral-100 text-neutral-950' : 'border-neutral-700 text-neutral-300 hover:bg-neutral-800'
+              }`}
+            >
+              {v === 'average' ? 'All exercises' : EXERCISES[v].title}
+            </button>
+          ))}
+        </div>
+      }
+    >
       {last ? (
-        <section className="rounded-3xl border-2 border-neutral-800 bg-neutral-900 p-5">
+        <div>
           {/* Ticker-style headline: where you are now and how far you've come. */}
-          <div className="text-xl text-neutral-300">{label} · weaker arm vs stronger arm</div>
-          <div className="flex flex-wrap items-baseline gap-x-5">
-            <span className="text-7xl font-extrabold">{last.value}%</span>
-            <span className="text-2xl font-bold" style={{ color: up ? GOOD : BAD }}>
+          <div className="text-lg text-neutral-400">{label} · weaker arm compared with stronger arm</div>
+          <div className="flex flex-wrap items-baseline gap-x-4">
+            <span className="text-5xl font-semibold">{last.value}%</span>
+            <span className="text-xl font-semibold" style={{ color: up ? GOOD : BAD }}>
               {up ? '▲' : '▼'} {up ? '+' : ''}
               {change} points
             </span>
             <span className="text-xl text-neutral-300">since session {first.number}</span>
           </div>
 
-          <div className="mt-4 h-80 w-full sm:h-96">
+          <div className="mt-4 h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={points} margin={{ top: 16, right: 24, bottom: 8, left: 0 }}>
                 <defs>
@@ -130,19 +123,12 @@ export function Progress() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <p className="mt-2 text-lg text-neutral-400">Each dot is one session. Touch a dot to see that day.</p>
-        </section>
+          <p className="mt-1 text-base text-neutral-400">Each dot is one session. Point at a dot to see that day.</p>
+        </div>
       ) : (
-        <p className="text-2xl text-neutral-300">No finished sessions yet.</p>
+        <p className="text-xl text-neutral-300">No finished sessions yet.</p>
       )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <BigButton variant="secondary" onClick={() => navigate('/patient/history')}>
-          📋 Past sessions
-        </BigButton>
-        <BigButton onClick={() => navigate('/patient')}>Back to home</BigButton>
-      </div>
-    </div>
+    </Card>
   );
 }
 
@@ -150,11 +136,11 @@ function PointTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload as Point;
   return (
-    <div className="rounded-xl border-2 border-neutral-600 bg-neutral-950 px-4 py-2 text-lg">
+    <div className="rounded-xl border border-neutral-600 bg-neutral-950 px-4 py-2 text-lg">
       <div className="text-neutral-300">
         Session {p.number} · {p.date}
       </div>
-      <div className="text-2xl font-extrabold">{p.value}%</div>
+      <div className="text-2xl font-semibold">{p.value}%</div>
     </div>
   );
 }

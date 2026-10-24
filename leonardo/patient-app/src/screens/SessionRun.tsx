@@ -178,7 +178,7 @@ export function SessionRun() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-3xl font-extrabold sm:text-4xl">
+        <h1 className="text-2xl font-semibold sm:text-3xl">
           {step.exerciseIndex + 1}/{plan.exercises.length} · {info.title}
         </h1>
         {phase !== 'setup' && phase !== 'explain' && (
@@ -211,16 +211,16 @@ export function SessionRun() {
           {phase === 'countdown' && (
             <Overlay>
               <p className="text-2xl">{info.instruction}</p>
-              <p className="mt-2 text-7xl font-extrabold">{countdown > 0 ? countdown : 'Go!'}</p>
+              <p className="mt-2 text-7xl font-semibold">{countdown > 0 ? countdown : 'Go!'}</p>
             </Overlay>
           )}
           {phase === 'done' && (
             <Overlay>
-              <p className="text-3xl font-extrabold">{doneText}</p>
+              <p className="text-3xl font-semibold">{doneText}</p>
             </Overlay>
           )}
           {phase === 'active' && warning && (
-            <div className="absolute inset-x-3 top-3 rounded-2xl bg-amber-400 px-4 py-3 text-center text-3xl font-extrabold text-neutral-950">
+            <div className="absolute inset-x-3 top-3 rounded-2xl bg-amber-400 px-4 py-3 text-center text-3xl font-semibold text-neutral-950">
               ⚠ {warning}
             </div>
           )}
@@ -228,9 +228,9 @@ export function SessionRun() {
 
         <div className="flex gap-4 lg:flex-col">
           <Bar value={value} max={info.scaleMax} goal={goal} unit={info.unit} />
-          <div className="flex flex-1 flex-col justify-center rounded-3xl bg-neutral-900 p-4 text-center">
+          <div className="flex flex-1 flex-col justify-center rounded-2xl bg-neutral-900 p-4 text-center">
             <div className="text-xl text-neutral-300">Reps</div>
-            <div className="text-6xl font-extrabold">
+            <div className="text-6xl font-semibold">
               {reps}
               <span className="text-3xl text-neutral-400">/{planEx.reps}</span>
             </div>
@@ -253,7 +253,7 @@ export function SessionRun() {
 function Overlay({ children }: { children: ReactNode }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center p-4">
-      <div className="max-w-xl rounded-3xl bg-neutral-900/95 p-6 text-center shadow-xl">{children}</div>
+      <div className="max-w-xl rounded-2xl bg-neutral-900/95 p-6 text-center shadow-xl">{children}</div>
     </div>
   );
 }
@@ -263,7 +263,7 @@ function Bar({ value, max, goal, unit }: { value: number; max: number; goal: num
   const pct = (x: number) => `${Math.min(100, Math.max(0, (x / max) * 100))}%`;
   const reached = goal !== null && value >= goal * 0.98;
   return (
-    <div className="relative h-72 w-32 shrink-0 overflow-hidden rounded-3xl border-4 border-neutral-500 bg-neutral-900 lg:h-96 lg:w-full">
+    <div className="relative h-72 w-32 shrink-0 overflow-hidden rounded-2xl border border-neutral-500 bg-neutral-900 lg:h-96 lg:w-full">
       <div
         className={`absolute inset-x-0 bottom-0 transition-[height] duration-100 ${reached ? 'bg-green-600' : 'bg-neutral-300'}`}
         style={{ height: pct(value) }}
@@ -273,7 +273,7 @@ function Bar({ value, max, goal, unit }: { value: number; max: number; goal: num
           <span className="absolute right-1 -top-9 rounded bg-neutral-50 px-2 text-lg font-bold text-neutral-950">Goal</span>
         </div>
       )}
-      <div className="absolute inset-x-0 top-3 text-center text-4xl font-extrabold text-white mix-blend-difference">
+      <div className="absolute inset-x-0 top-3 text-center text-4xl font-semibold text-white mix-blend-difference">
         {Math.round(value)}
         {unit}
       </div>

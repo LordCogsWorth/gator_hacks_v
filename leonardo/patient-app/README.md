@@ -20,15 +20,16 @@ With no camera (or before Stuti's module is plugged in), the skeleton and number
 
 | Route | Screen | What it does |
 | --- | --- | --- |
-| `/patient` | `Home.tsx` | Start button, today's 3 exercises, streak, days to next check-in |
+| `/patient` | `Dashboard.tsx` | Stats, coach avatar with the 3 exercises, start session, care team, progress chart, recent sessions |
 | `/patient/checkin` | `CheckIn.tsx` | Pain 0–10 slider + tiredness emoji. Pain 7+ → safety stop |
 | `/patient/session` | `SessionRun.tsx` | For each exercise: coach avatar explains it (`components/ExerciseAvatar.tsx`) → camera setup → healthy arm → weak arm. Voice rep count, goal line, "Sit back" warning |
 | `/patient/summary` | `Summary.tsx` | "Weak arm reached 64% of your healthy arm — up from 58% last week", streak, save |
 | `/patient/stop` | `SafetyStop.tsx` | Pain or dizziness: end the session, show advice |
-| `/patient/history` | `History.tsx` | Every past session, newest first; tap one for each arm's numbers |
-| `/patient/progress` | `Progress.tsx` | Stock-style chart of weak-arm % per session (Recharts), per exercise or all |
+| `/patient/sessions` | `History.tsx` | Every past session, newest first; tap one for each arm's numbers |
+| `/patient/messages` | `Messages.tsx` | Text chat with connected physicians (demo auto-reply until the care dashboard is wired) |
+| `/patient/settings` | `Settings.tsx` | Edit name, phone, gender; add a physician by email (sends a request they accept) |
 
-The red "Stroke warning signs — call 911" button is in the header of every screen (`components/Layout.tsx`).
+The site layout (sidebar, top bar, red "Call 911" button on every screen) is in `components/Layout.tsx`. The progress chart is `components/ProgressChart.tsx`.
 
 ## Where things live
 

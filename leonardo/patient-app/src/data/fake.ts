@@ -1,5 +1,5 @@
 // Hardcoded demo data. Dates are relative to today so the demo always looks current.
-import type { ExerciseId, ExerciseResult, Patient, Plan, Session } from '../types';
+import type { ExerciseId, ExerciseResult, Message, Patient, Physician, PhysicianLink, Plan, Session } from '../types';
 
 const DAY = 86_400_000;
 const daysFromNow = (n: number, hour = 10) => {
@@ -16,6 +16,8 @@ export const fakePatient: Patient = {
   phase: 1,
   max_raise_angle: 120,
   next_checkin: daysFromNow(5).slice(0, 10),
+  phone: '(352) 555-0142',
+  gender: 'female',
 };
 
 export const fakePlan: Plan = {
@@ -63,3 +65,19 @@ SESSION_DAYS.forEach((ago, i) => {
     fakeResults.push({ ...base, id: `${id}-${ex}-w`, side: 'weak', best_value: Math.round((healthy * sym) / 100), sec_per_rep: 4.1, smoothness: 3, comp_rep_pct: 25 });
   });
 });
+
+// Physician accounts that exist on the care-team side. Patients find them by email.
+export const fakePhysicians: Physician[] = [
+  { id: 'dr1', name: 'Dr. Anita Patel', role: 'Physical therapist', clinic: 'Gainesville Rehab Center', email: 'apatel@rehabclinic.org' },
+  { id: 'dr2', name: 'Dr. James Okafor', role: 'Neurologist', clinic: 'UF Health Neurology', email: 'jokafor@ufhealth.org' },
+  { id: 'dr3', name: 'Dr. Lisa Chen', role: 'Occupational therapist', clinic: 'Gainesville Rehab Center', email: 'lchen@rehabclinic.org' },
+];
+
+export const fakeLinks: PhysicianLink[] = [{ physician_id: 'dr1', status: 'accepted', requested_at: daysFromNow(-60) }];
+
+export const fakeMessages: Message[] = [
+  { id: 'm1', physician_id: 'dr1', from: 'physician', text: 'Hi Maria, I approved your new plan. Same three exercises, 8 reps each.', sent_at: daysFromNow(-14, 9) },
+  { id: 'm2', physician_id: 'dr1', from: 'patient', text: 'Thank you. My shoulder felt a little sore after the arm raises.', sent_at: daysFromNow(-13, 18) },
+  { id: 'm3', physician_id: 'dr1', from: 'physician', text: 'That is normal at first. Only lift as high as is comfortable, and tell me if the pain goes above 5.', sent_at: daysFromNow(-13, 19) },
+  { id: 'm4', physician_id: 'dr1', from: 'physician', text: 'Great progress this week. Your arm raise is up to 59% of your other arm.', sent_at: daysFromNow(-2, 11) },
+];

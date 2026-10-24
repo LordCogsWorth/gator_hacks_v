@@ -1,12 +1,28 @@
 // The only place the screens get or save data. Today it uses fake data + localStorage;
 // later these functions switch to Supabase and the screens don't change.
-import { fakePatient, fakePlan, fakeResults, fakeSessions } from './data/fake';
-import type { ExerciseId, ExerciseResult, Patient, Plan, Session } from './types';
+import { useEffect, useState } from 'react';
+import { fakeLinks, fakeMessages, fakePatient, fakePhysicians, fakePlan, fakeResults, fakeSessions } from './data/fake';
+import type { ExerciseId, ExerciseResult, Message, Patient, Physician, PhysicianLink, Plan, Session } from './types';
 import type { Joint3D } from './camera/types';
 
 const SESSIONS_KEY = 'rehabtrack.sessions';
 const RESULTS_KEY = 'rehabtrack.results';
 const REPLAY_KEY = (id: string) => `rehabtrack.replay.${id}`;
+const PROFILE_KEY = 'rehabtrack.profile';
+const LINKS_KEY = 'rehabtrack.links';
+const MESSAGES_KEY = 'rehabtrack.messages';
+
+// Screens that show editable data (name, physicians, messages) re-render when it changes.
+const listeners = new Set<() => void>();
+const changed = () => listeners.forEach((l) => l());
+export function useDataChanges() {
+  const [, setVersion] = useState(0);
+  useEffect(() => {
+    const l = () => setVersion((v) => v + 1);
+    listeners.add(l);
+    return () => void listeners.delete(l);
+  }, []);
+}
 
 function readLocal<T>(key: string): T[] {
   try {
@@ -26,7 +42,67 @@ function writeLocal(key: string, value: unknown) {
 }
 
 export function getPatient(): Patient {
-  return fakePatient;
+  try {
+    return { ...fakePatient, ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') };
+  } catch {
+    return fakePatient;
+  }
+}
+
+export function updateProfile(profile: Pick<Patient, 'name' | 'phone' | 'gender'>) {
+  writeLocal(PROFILE_KEY, profile);
+  changed();
+}
+
+// --- Physicians: the patient sends a request; the physician accepts it on the care dashboard. ---
+
+export function getPhysician(id: string): Physician | undefined {
+  return fakePhysicians.find((p) => p.id === id);
+}
+
+export function findPhysicianByEmail(email: string): Physician | undefined {
+  const e = email.trim().toLowerCase();
+  return fakePhysicians.find((p) => p.email.toLowerCase() === e);
+}
+
+export function getLinks(): PhysicianLink[] {
+  const local = readLocal<PhysicianLink & { removed?: boolean }>(LINKS_KEY);
+  const ids = new Set(local.map((l) => l.physician_id));
+  return [...fakeLinks.filter((l) => !ids.has(l.physician_id)), ...local].filter((l) => !('removed' in l && l.removed));
+}
+
+export function requestPhysician(physicianId: string) {
+  const others = readLocal<PhysicianLink>(LINKS_KEY).filter((l) => l.physician_id !== physicianId);
+  writeLocal(LINKS_KEY, [...others, { physician_id: physicianId, status: 'pending', requested_at: new Date().toISOString() }]);
+  changed();
+}
+
+export function removePhysician(physicianId: string) {
+  const others = readLocal<PhysicianLink>(LINKS_KEY).filter((l) => l.physician_id !== physicianId);
+  writeLocal(LINKS_KEY, [...others, { physician_id: physicianId, status: 'pending', requested_at: '', removed: true }]);
+  changed();
+}
+
+// --- Messages with connected physicians ---
+
+export function getMessages(physicianId: string): Message[] {
+  return [...fakeMessages, ...readLocal<Message>(MESSAGES_KEY)]
+    .filter((m) => m.physician_id === physicianId)
+    .sort((a, b) => a.sent_at.localeCompare(b.sent_at));
+}
+
+function addMessage(m: Omit<Message, 'id' | 'sent_at'>) {
+  const msg: Message = { ...m, id: crypto.randomUUID?.() ?? String(Date.now()), sent_at: new Date().toISOString() };
+  writeLocal(MESSAGES_KEY, [...readLocal<Message>(MESSAGES_KEY), msg]);
+  changed();
+}
+
+export function sendMessage(physicianId: string, text: string) {
+  addMessage({ physician_id: physicianId, from: 'patient', text });
+  // Demo only: until the care dashboard can reply, the physician sends a short automatic answer.
+  window.setTimeout(() => {
+    addMessage({ physician_id: physicianId, from: 'physician', text: "Thanks for your message. I'll take a look and get back to you today." });
+  }, 2500);
 }
 
 export function getCurrentPlan(): Plan {

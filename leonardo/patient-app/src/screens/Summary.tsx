@@ -55,17 +55,15 @@ export function Summary() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-4xl font-extrabold">🎉 Session complete</h1>
-
       <ul className="space-y-4">
         {lines.map((l) => (
-          <li key={l.name} className="rounded-3xl border-2 border-neutral-700 p-5">
+          <li key={l.name} className="rounded-2xl border border-neutral-700 p-5">
             <div className="text-xl font-bold text-neutral-300">{EXERCISES[l.name].title}</div>
             {l.today === null ? (
               <div className="text-2xl">Not finished today.</div>
             ) : (
               <div className="mt-1 flex flex-wrap items-baseline gap-x-4">
-                <span className="text-6xl font-extrabold text-neutral-50">{l.today}%</span>
+                <span className="text-6xl font-semibold text-neutral-50">{l.today}%</span>
                 <span className="text-2xl">{sentence(l.name, l.today, l.before)}</span>
               </div>
             )}
@@ -73,19 +71,16 @@ export function Summary() {
         ))}
       </ul>
 
-      <div className="flex flex-wrap items-center gap-4 rounded-3xl bg-neutral-900 p-5 text-2xl">
-        {streak !== null && <span className="font-extrabold">🔥 {streak} days in a row</span>}
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-neutral-900 p-5 text-2xl">
+        {streak !== null && <span className="font-semibold">{streak} days in a row</span>}
         <span className="text-neutral-300">
           {saved === 'saving' ? 'Saving…' : saved === 'saved' ? '✓ Sent to your care team' : 'Could not save — will retry'}
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <BigButton variant="secondary" onClick={() => navigate('/patient/progress')}>
-          📈 See my progress
-        </BigButton>
-        <BigButton onClick={() => navigate('/patient')}>Done</BigButton>
-      </div>
+      <BigButton className="w-full" onClick={() => navigate('/patient')}>
+        Back to dashboard
+      </BigButton>
     </div>
   );
 }

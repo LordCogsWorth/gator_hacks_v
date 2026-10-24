@@ -12,7 +12,11 @@ export interface Patient {
   phase: number;
   max_raise_angle: number;
   next_checkin: string;
+  phone: string;
+  gender: Gender;
 }
+
+export type Gender = 'female' | 'male' | 'other' | 'prefer_not';
 
 export interface PlanExercise {
   name: ExerciseId;
@@ -55,4 +59,27 @@ export interface ExerciseResult {
   trunk_lean_max: number;
   shoulder_hike_max: number;
   comp_rep_pct: number;
+}
+
+export interface Physician {
+  id: string;
+  name: string;
+  role: string;
+  clinic: string;
+  email: string;
+}
+
+/** A patient ↔ physician connection, like a friend request. The physician accepts it from the care dashboard. */
+export interface PhysicianLink {
+  physician_id: string;
+  status: 'pending' | 'accepted';
+  requested_at: string;
+}
+
+export interface Message {
+  id: string;
+  physician_id: string;
+  from: 'patient' | 'physician';
+  text: string;
+  sent_at: string;
 }

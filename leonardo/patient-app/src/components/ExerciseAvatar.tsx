@@ -1,4 +1,5 @@
 // A small coach figure that acts out the exercise, with a speech bubble that reads out the steps.
+import { Play, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ExerciseInfo } from '../data/exercises';
 import type { ExerciseId } from '../types';
@@ -26,50 +27,56 @@ export function ExerciseExplainer({ info, onStart }: { info: ExerciseInfo; onSta
   return (
     <div className="space-y-5">
       <div className="grid items-center gap-5 md:grid-cols-[minmax(0,340px)_1fr]">
-        <div className="rounded-3xl border-2 border-neutral-800 bg-neutral-900 p-4">
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
           <Avatar exercise={info.id} />
-          <div className="text-center text-xl font-bold text-neutral-300">Your coach</div>
+          <div className="text-center text-lg font-medium text-neutral-400">Your coach</div>
         </div>
 
         {/* Speech bubble, with a tail pointing at the coach on wide screens. */}
-        <div className="relative rounded-3xl border-2 border-neutral-600 bg-neutral-800 p-6">
+        <div className="relative rounded-2xl border border-neutral-700 bg-neutral-900 p-6">
           <span
-            className="absolute -left-[13px] top-1/2 hidden h-6 w-6 -translate-y-1/2 rotate-45 border-b-2 border-l-2 border-neutral-600 bg-neutral-800 md:block"
+            className="absolute -left-[12px] top-1/2 hidden h-6 w-6 -translate-y-1/2 rotate-45 border-b border-l border-neutral-700 bg-neutral-900 md:block"
             aria-hidden
           />
-          <h2 className="text-3xl font-extrabold">{info.title}</h2>
-          <ol className="mt-4 space-y-3">
-            {info.steps.map((s, i) => (
-              <li
-                key={s}
-                className={`flex gap-3 rounded-2xl p-2 text-2xl transition-colors ${current === i ? 'bg-neutral-100 text-neutral-950' : ''}`}
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-current font-extrabold">{i + 1}</span>
-                <span>{s}</span>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-4 text-xl text-neutral-300">Stronger arm first, then your weaker arm.</p>
+          <h2 className="text-2xl font-semibold">{info.title}</h2>
+          <StepList steps={info.steps} current={current} />
+          <p className="mt-4 text-lg text-neutral-400">Stronger arm first, then your weaker arm.</p>
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
-        <BigButton onClick={onStart}>▶ I'm ready — let's start</BigButton>
+        <BigButton onClick={onStart}>
+          <Play className="h-5 w-5" /> I'm ready, let's start
+        </BigButton>
         <BigButton variant="secondary" onClick={() => setReplay((r) => r + 1)}>
-          🔁 Explain again
+          <RotateCcw className="h-5 w-5" /> Explain again
         </BigButton>
       </div>
     </div>
   );
 }
 
-function Avatar({ exercise }: { exercise: ExerciseId }) {
+export function Avatar({ exercise }: { exercise: ExerciseId }) {
   return (
     <svg viewBox="0 0 300 300" className="mx-auto w-full max-w-[300px]" role="img" aria-label={`Coach showing the ${exercise.replace('_', ' ')} exercise`}>
       {exercise === 'arm_raise' && <ArmRaise />}
       {exercise === 'forward_reach' && <ForwardReach />}
       {exercise === 'hand_open' && <HandOpen />}
     </svg>
+  );
+}
+
+/** Numbered steps; the one being read aloud is highlighted. */
+export function StepList({ steps, current = -1 }: { steps: string[]; current?: number }) {
+  return (
+    <ol className="mt-4 space-y-2">
+      {steps.map((s, i) => (
+        <li key={s} className={`flex gap-3 rounded-xl p-2 text-xl transition-colors ${current === i ? 'bg-neutral-100 text-neutral-950' : ''}`}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-current text-lg font-semibold">{i + 1}</span>
+          <span className="pt-0.5">{s}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

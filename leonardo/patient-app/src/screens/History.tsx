@@ -19,13 +19,7 @@ export function History() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-4xl font-extrabold">Past sessions</h1>
-        <BigButton variant="secondary" onClick={() => navigate('/patient/progress')}>
-          📈 See my progress
-        </BigButton>
-      </div>
-      <p className="text-2xl text-neutral-300">{sessions.length} sessions done. The % is how your weaker arm did compared with your stronger arm.</p>
+      <p className="text-xl text-neutral-300">{sessions.length} sessions done. The % is how your weaker arm did compared with your stronger arm.</p>
 
       <ul className="space-y-4">
         {sessions.map((s) => (
@@ -34,7 +28,7 @@ export function History() {
       </ul>
 
       <BigButton className="w-full" onClick={() => navigate('/patient')}>
-        Back to home
+        Back to dashboard
       </BigButton>
     </div>
   );
@@ -46,11 +40,11 @@ function SessionCard({ s, open, onToggle }: { s: SessionSummary; open: boolean; 
   const stopped = s.average === null;
 
   return (
-    <li className="overflow-hidden rounded-3xl border-2 border-neutral-700 bg-neutral-900">
+    <li className="overflow-hidden rounded-2xl border border-neutral-700 bg-neutral-900">
       <button onClick={onToggle} aria-expanded={open} className="flex min-h-[96px] w-full flex-wrap items-center gap-x-6 gap-y-2 p-5 text-left">
         <div className="min-w-[180px]">
           <div className="text-lg text-neutral-400">Session {s.number}</div>
-          <div className="text-2xl font-extrabold">{dateLabel(s.session.started_at)}</div>
+          <div className="text-2xl font-semibold">{dateLabel(s.session.started_at)}</div>
         </div>
         {stopped ? (
           <div className="text-2xl text-neutral-300">Stopped early {s.session.pain >= 7 ? '(pain)' : ''}</div>
@@ -59,7 +53,7 @@ function SessionCard({ s, open, onToggle }: { s: SessionSummary; open: boolean; 
             {exercises.map((ex) => (
               <div key={ex} className="rounded-2xl bg-neutral-800 px-4 py-2">
                 <div className="text-base text-neutral-400">{EXERCISES[ex].title}</div>
-                <div className="text-2xl font-extrabold">{s.symmetry[ex] !== undefined ? `${s.symmetry[ex]}%` : '—'}</div>
+                <div className="text-2xl font-semibold">{s.symmetry[ex] !== undefined ? `${s.symmetry[ex]}%` : '—'}</div>
               </div>
             ))}
           </div>
@@ -70,7 +64,7 @@ function SessionCard({ s, open, onToggle }: { s: SessionSummary; open: boolean; 
       </button>
 
       {open && (
-        <div className="space-y-4 border-t-2 border-neutral-800 p-5 text-xl">
+        <div className="space-y-4 border-t border-neutral-800 p-5 text-xl">
           <div className="flex flex-wrap gap-6">
             <span>Pain: <b>{s.session.pain}/10</b></span>
             <span>Tiredness: <b>{tired ? `${tired.emoji} ${tired.label}` : '—'}</b></span>
