@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch Daily Check</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1a1d21; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2563eb; --ok: #15803d; --bad: #b91c1c; --flash: #fef9c3;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .narrow { max-width: 380px; margin: 40px auto; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label { font-size: 12px; color: var(--muted); display: block; margin: 0 0 4px; }
+  input, select { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: #fff; min-width: 0; }
+  .stack input { width: 100%; margin-bottom: 12px; }
+  button { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .stack button.primary { width: 100%; padding: 9px; }
+  .status { display: flex; flex-wrap: wrap; gap: 16px; color: var(--muted); font-size: 13px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+  .error { color: var(--bad); white-space: pre-wrap; margin-top: 8px; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:nth-child(-n+2), td:nth-child(-n+2) { text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.empty { color: #c0c4cc; }
+  tr.flash td { background: var(--flash); }
+  .placeholder { color: var(--muted); text-align: center; padding: 32px; }
+  details summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <!-- Sign in -->
+  <form class="card narrow stack" id="signinView" hidden>
+    <h1>Watch Daily Check</h1>
+    <p class="sub">Sign in with a Supabase user to see the iPhone Shortcut's data.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button class="primary" type="submit">Sign in</button>
+    <div class="error" id="signinError" hidden></div>
+    <details id="setup">
+      <summary>Supabase project</summary>
+      <div style="margin-top:10px">
+        <label for="url">Project URL</label>
+        <input id="url" placeholder="https://xxxx.supabase.co">
+        <label for="key">Anon public key</label>
+        <input id="key" placeholder="eyJhbGciOi...">
+      </div>
+    </details>
+  </form>
+
+  <!-- Data -->
+  <div id="dataView" hidden>
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div>
+        <h1>Watch Daily Check</h1>
+        <p class="sub">Rows sent by the iPhone Shortcut (contract §6) to Supabase.</p>
+      </div>
+      <div class="row"><span class="sub" id="who" style="margin:0"></span><button id="signout">Sign out</button></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <label for="patient" style="margin:0">Patient</label>
+          <select id="patient"><option value="">All patients</option></select>
+          <button id="refresh">Refresh</button>
+          <button id="test" title="Sends a fake day for p-test through the same function the Shortcut uses">Send test row</button>
+        </div>
+        <div class="status">
+          <span><span class="dot" id="connDot"></span><span id="connText">Loading…</span></span>
+          <span id="liveText"></span>
+          <span id="lastText"></span>
+        </div>
+      </div>
+      <div class="error" id="error" hidden></div>
+    </div>
+
+    <div class="card tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Patient</th><th>Steps</th><th>Resting HR</th><th>BP</th><th>Falls</th><th>Steadiness %</th><th>Exercise (min)</th><th>Stand (h)</th><th>Last sent</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <div class="card tablewrap">
+      <div class="row" style="justify-content:space-between;margin-bottom:8px">
+        <strong>Watch sessions</strong>
+        <button id="testSession" title="Sends a fake watch session through the same function the watch app uses">Send test session</button>
+      </div>
+      <div class="error" id="sessError" hidden></div>
+      <table>
+        <thead>
+          <tr>
+            <th>Started</th><th>Patient</th><th>Exercise</th><th>Arm</th><th>Duration</th><th>Reps</th>
+            <th>Best angle</th><th>Avg HR</th><th>Max HR</th>
+          </tr>
+        </thead>
+        <tbody id="sessRows"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+  // Optional: hard-code these so teammates don't have to paste them in.
+  const DEFAULT_URL = '';
+  const DEFAULT_KEY = '';
+
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }
+  };
+
+  let client = null;
+  let channel = null;
+  let rows = [];
+  let sessions = [];
+  const flashIds = new Set();
+
+  function showError(el, msg) {
+    el.hidden = !msg;
+    el.textContent = msg || '';
+  }
+
+  function setConn(state, text) {
+    $('connDot').className = 'dot ' + (state || '');
+    $('connText').textContent = text;
+  }
+
+  function explain(err) {
+    const m = err?.message || String(err);
+    if (/relation .* does not exist|Could not find the (table|function)/i.test(m)) return m + '\n→ Run schema.sql in the Supabase SQL Editor.';
+    if (/Invalid API key|JWT|401/i.test(m)) return m + '\n→ Check the anon key (Project Settings → API).';
+    if (/Invalid login credentials/i.test(m)) return m + '\n→ Create the user in Supabase → Authentication → Users → Add user.';
+    if (/Failed to fetch/i.test(m)) return m + '\n→ Check the Project URL and your internet connection.';
+    return m;
+  }
+
+  function ago(iso) {
+    const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.round(s / 60)} min ago`;
+    if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+    return new Date(iso).toLocaleString();
+  }
+
+  const fmt = (v, digits = 0) => (v == null ? null : Number(v).toLocaleString(undefined, { maximumFractionDigits: digits }));
+  const cell = (v) => (v == null ? '<td class="empty">—</td>' : `<td>${v}</td>`);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function render() {
+    const patient = $('patient').value;
+    const shown = rows.filter((r) => !patient || r.patient_id === patient);
+    if (!shown.length) {
+      $('rows').innerHTML = '<tr><td colspan="10" class="placeholder">No rows yet. Run the Shortcut on the iPhone, or click “Send test row”.</td></tr>';
+    } else {
+      $('rows').innerHTML = shown.map((r) => `
+        <tr class="${flashIds.has(r.id) ? 'flash' : ''}">
+          <td>${esc(r.date)}</td><td>${esc(r.patient_id)}</td>
+          ${cell(fmt(r.steps))}${cell(fmt(r.resting_hr))}
+          ${cell(r.bp_sys != null || r.bp_dia != null ? `${fmt(r.bp_sys) ?? '?'}/${fmt(r.bp_dia) ?? '?'}` : null)}
+          ${cell(fmt(r.falls))}${cell(fmt(r.walking_steadiness))}
+          ${cell(fmt(r.exercise_min))}${cell(fmt(r.stand_hr))}
+          <td title="${esc(r.updated_at)}">${ago(r.updated_at)}</td>
+        </tr>`).join('');
+    }
+    const latest = rows.reduce((m, r) => (!m || r.updated_at > m ? r.updated_at : m), null);
+    $('lastText').textContent = latest ? `Latest data: ${ago(latest)}` : '';
+  }
+
+  const EXERCISES = { arm_raise: 'Arm raise', forward_reach: 'Forward reach' };
+
+  function renderSessions() {
+    const patient = $('patient').value;
+    const shown = sessions.filter((s) => !patient || s.patient_id === patient);
+    if (!shown.length) {
+      $('sessRows').innerHTML = '<tr><td colspan="9" class="placeholder">No sessions yet. Finish a session on the watch, or click “Send test session”.</td></tr>';
+      return;
+    }
+    $('sessRows').innerHTML = shown.map((s) => {
+      const sec = Math.round(Number(s.duration_sec) || 0);
+      return `
+        <tr class="${flashIds.has('s' + s.id) ? 'flash' : ''}">
+          <td title="${esc(s.started_at)}">${esc(new Date(s.started_at).toLocaleString())}</td><td>${esc(s.patient_id)}</td>
+          <td>${esc(EXERCISES[s.exercise] || s.exercise)}</td>${cell(s.arm ? esc(s.arm) : null)}
+          <td>${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}</td>
+          ${cell(s.reps != null ? `${s.reps}${s.target_reps != null ? ' / ' + s.target_reps : ''}` : null)}
+          ${cell(s.best_elevation_deg != null ? fmt(s.best_elevation_deg) + '°' : null)}
+          ${cell(fmt(s.avg_hr))}${cell(fmt(s.max_hr))}
+        </tr>`;
+    }).join('');
+  }
+
+  async function loadSessions() {
+    const { data, error } = await client
+      .from('watch_sessions')
+      .select('id, session_id, patient_id, exercise, arm, started_at, duration_sec, reps, target_reps, best_elevation_deg, avg_hr, max_hr')
+      .order('started_at', { ascending: false })
+      .limit(200);
+    if (error) {
+      const m = explain(error);
+      showError($('sessError'), /schema\.sql/.test(m) ? m.replace('Run schema.sql', 'Run justin/watch-sessions/schema.sql') : m);
+      return;
+    }
+    showError($('sessError'), '');
+    sessions = data;
+    renderPatients();
+    renderSessions();
+  }
+
+  function upsertSession(s) {
+    const i = sessions.findIndex((x) => x.id === s.id);
+    if (i >= 0) sessions[i] = s; else sessions.push(s);
+    sessions.sort((a, b) => b.started_at.localeCompare(a.started_at));
+    flashIds.add('s' + s.id);
+    setTimeout(() => { flashIds.delete('s' + s.id); renderSessions(); }, 3000);
+    renderPatients();
+    renderSessions();
+  }
+
+  function renderPatients() {
+    const current = $('patient').value;
+    const ids = [...new Set([...rows, ...sessions].map((r) => r.patient_id))].sort();
+    $('patient').innerHTML = '<option value="">All patients</option>' + ids.map((id) => `<option>${esc(id)}</option>`).join('');
+    $('patient').value = ids.includes(current) ? current : '';
+  }
+
+  async function load() {
+    if (!client) return;
+    loadSessions();
+    const { data, error } = await client
+      .from('watch_daily')
+      .select('*')
+      .order('date', { ascending: false })
+      .order('patient_id')
+      .limit(500);
+    if (error) {
+      setConn('bad', 'Error');
+      showError($('error'), explain(error));
+      return;
+    }
+    showError($('error'), '');
+    setConn('ok', 'Connected');
+    rows = data;
+    renderPatients();
+    render();
+  }
+
+  function upsertLocal(row) {
+    const i = rows.findIndex((r) => r.id === row.id);
+    if (i >= 0) rows[i] = row; else rows.push(row);
+    rows.sort((a, b) => b.date.localeCompare(a.date) || a.patient_id.localeCompare(b.patient_id));
+    flashIds.add(row.id);
+    setTimeout(() => { flashIds.delete(row.id); render(); }, 3000);
+    renderPatients();
+    render();
+  }
+
+  function makeClient() {
+    // Keep just https://xxxx.supabase.co, even if a /rest/v1/... URL was pasted.
+    const url = $('url').value.trim().replace(/\/(rest|auth)\/v1.*$/, '').replace(/\/+$/, '');
+    const key = $('key').value.trim();
+    if (!url || !key) return null;
+    try { return supabase.createClient(url, key); } catch { return null; }
+  }
+
+  function showSignIn() {
+    $('dataView').hidden = true;
+    $('signinView').hidden = false;
+    if (!$('url').value || !$('key').value) $('setup').open = true;
+  }
+
+  function showData(user) {
+    $('signinView').hidden = true;
+    $('dataView').hidden = false;
+    $('who').textContent = user.email || '';
+    load();
+    if (channel) client.removeChannel(channel);
+    channel = client
+      .channel('watch_daily_live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watch_daily' }, (p) => {
+        if (p.new && p.new.id) upsertLocal(p.new);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watch_sessions' }, (p) => {
+        if (p.new && p.new.id) upsertSession(p.new);
+      })
+      .subscribe((status) => {
+        $('liveText').textContent = status === 'SUBSCRIBED' ? 'Live updates on' : status === 'CHANNEL_ERROR' ? 'Live updates off (auto-refreshing)' : '';
+      });
+  }
+
+  $('signinView').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    store.set('sb_url', $('url').value);
+    store.set('sb_key', $('key').value);
+    client = makeClient();
+    if (!client) { $('setup').open = true; showError($('signinError'), 'Enter the Supabase Project URL and anon key.'); return; }
+    const { data, error } = await client.auth.signInWithPassword({ email: $('email').value, password: $('password').value });
+    if (error) { showError($('signinError'), explain(error)); return; }
+    showError($('signinError'), '');
+    showData(data.user);
+  });
+
+  $('signout').onclick = async () => {
+    if (channel) client.removeChannel(channel);
+    channel = null;
+    rows = [];
+    sessions = [];
+    await client.auth.signOut();
+    showSignIn();
+  };
+
+  $('refresh').onclick = load;
+  $('patient').onchange = () => { render(); renderSessions(); };
+
+  // Same function and body shape as the watch app (watch-sessions/README.md).
+  $('testSession').onclick = async () => {
+    const end = new Date();
+    const start = new Date(end - (5 + Math.random() * 5) * 60000);
+    const target = 10;
+    const reps = 6 + Math.round(Math.random() * 4);
+    const n = Math.round((end - start) / 200); // 5 Hz
+    const { error } = await client.rpc('submit_watch_session', {
+      sessionId: 'test-' + end.getTime(),
+      patientId: 'p-test',
+      exercise: Math.random() < 0.5 ? 'side_raise' : 'forward_reach',
+      arm: 'left',
+      startedAt: start.toISOString(),
+      endedAt: end.toISOString(),
+      targetReps: target, reps, attempts: reps + Math.round(Math.random() * 3),
+      bestElevationDeg: +(80 + Math.random() * 40).toFixed(1),
+      avgHr: 85 + Math.round(Math.random() * 15),
+      maxHr: 105 + Math.round(Math.random() * 20),
+      minHr: 70 + Math.round(Math.random() * 10),
+      trace: {
+        hz: 5,
+        elevationDeg: Array.from({ length: n }, (_, i) => +(50 - 45 * Math.cos(i / 20)).toFixed(1)),
+        directionDeg: Array.from({ length: n }, () => 85),
+        heartRate: Array.from({ length: n }, (_, i) => 85 + Math.round(10 * Math.sin(i / 300)))
+      }
+    });
+    if (error) showError($('sessError'), explain(error)); else loadSessions();
+  };
+
+  // Same function and body shape as the Shortcut (contract §6).
+  $('test').onclick = async () => {
+    const d = new Date();
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const { error } = await client.rpc('submit_watch_daily', {
+      patientId: 'p-test', date,
+      steps: 3000 + Math.round(Math.random() * 4000),
+      restingHr: 58 + Math.round(Math.random() * 12),
+      bpSys: 115 + Math.round(Math.random() * 20),
+      bpDia: 72 + Math.round(Math.random() * 12),
+      exerciseMin: Math.round(Math.random() * 40),
+      standHr: 4 + Math.round(Math.random() * 8),
+      falls: Math.random() < 0.1 ? 1 : 0,
+      walkingSteadiness: 60 + Math.round(Math.random() * 35)
+    });
+    if (error) showError($('error'), explain(error)); else load();
+  };
+
+  // Start: reuse a saved session if there is one.
+  $('url').value = store.get('sb_url') || DEFAULT_URL;
+  $('key').value = store.get('sb_key') || DEFAULT_KEY;
+  client = makeClient();
+  if (client) {
+    client.auth.getSession().then(({ data }) => (data.session ? showData(data.session.user) : showSignIn()));
+  } else {
+    showSignIn();
+  }
+
+  // Fallback in case realtime isn't enabled; also keeps "x min ago" fresh.
+  setInterval(() => { if (!$('dataView').hidden) load(); }, 30000);
+</script>
+</body>
+</html>
