@@ -6,12 +6,42 @@ import WatchKit
 
 // ⚠️ Set this to the "Watch app server URL" printed when the Node server starts
 // (your Mac's Wi-Fi address). The watch and Mac must be on the same network.
-let SERVER_URL = URL(string: "http://10.192.252.41:8080")!
+let SERVER_URL = URL(string: "https://gator-hacks-v.onrender.com")!
 let WATCH_SOURCE = "Kyle's Apple Watch"
+
+// Supabase (justin/watch-sessions). Each finished session is saved as one row in `watch_sessions`.
+// Fill in from Supabase → Project Settings → API. Uploads are skipped while these are placeholders.
+let SUPABASE_URL = URL(string: "https://rplaymproqabobpmtygv.supabase.co")!
+let SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwbGF5bXByb3FhYm9icG10eWd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4NDAxOTEsImV4cCI6MjEwODQxNjE5MX0.8PcCingVnqJNJDkBR3M55Fj_SzU3EIyC2VWs7lPqwbQ"
+let PATIENT_ID = "p-kyle"
+var supabaseConfigured: Bool { !SUPABASE_ANON_KEY.hasPrefix("YOUR-") && !SUPABASE_URL.absoluteString.contains("YOUR-PROJECT") }
 
 struct Prompt: Decodable { let seq: Int; let id: String; let title: String; let message: String }
 private struct PromptsResponse: Decodable { let latestSeq: Int; let prompts: [Prompt] }
 private struct SessionStartResponse: Decodable { struct Active: Decodable { let id: String }; let active: Active }
+
+/// Care plan approved by the doctor in RehabTrack (GET /plan).
+struct CarePlan: Decodable, Equatable {
+    struct Item: Decodable, Equatable, Identifiable {
+        let exercise: String
+        let reps: Int
+        var id: String { exercise }
+        /// Exercises the watch can track (hand_open needs the camera).
+        var kind: ExerciseKind? {
+            switch exercise {
+            case "arm_raise", "side_raise": return .sideRaise
+            case "forward_reach": return .forwardReach
+            default: return nil
+            }
+        }
+    }
+    let id: String
+    let approvedBy: String?
+    let approvedAt: String?
+    let phase: Int?
+    let exercises: [Item]
+}
+private struct PlanResponse: Decodable { let plan: CarePlan? }
 
 /// Screens of the watch app.
 enum Stage { case home, demo, calibrate, live, done }
@@ -29,6 +59,9 @@ final class WatchModel: NSObject, ObservableObject {
     @Published var serverOK = false
     @Published var pendingPrompt: Prompt?
     @Published var lastSummary: String?
+    @Published var plan: CarePlan?
+    /// True until the user opens the new plan on the watch.
+    @Published var planIsNew = false
 
     // Progress + reminder settings (saved on the watch)
     @Published var streak = 0
@@ -60,6 +93,16 @@ final class WatchModel: NSObject, ObservableObject {
     private var pollTimer: Timer?
     private var lastSeq: Int?
 
+    // Supabase session summary (5 Hz trace + heart rate)
+    @Published var cloudStatus: String?
+    private var cloudSessionId = ""
+    private var hrValues: [Double] = []
+    private var traceElev: [Double] = []
+    private var traceDir: [Double] = []
+    private var traceHr: [Any] = []
+    private var tick = 0
+    private let pendingKey = "pendingCloudSessions"
+
     // MARK: - Permissions
     func requestHealthAccess() {
         guard HKHealthStore.isHealthDataAvailable() else { return }
@@ -68,6 +111,7 @@ final class WatchModel: NSObject, ObservableObject {
 
     // MARK: - Prompt polling (dashboard → watch notification)
     func startPolling() {
+        retryPendingUploads()
         pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { _ in
             Task { @MainActor in await self.poll() }
@@ -82,15 +126,35 @@ final class WatchModel: NSObject, ObservableObject {
             let (data, _) = try await URLSession.shared.data(from: comps.url!)
             let r = try JSONDecoder().decode(PromptsResponse.self, from: data)
             serverOK = true
-            if lastSeq == nil { lastSeq = r.latestSeq; return } // don't replay old prompts
+            if lastSeq == nil { lastSeq = r.latestSeq; await loadPlan(); return } // don't replay old prompts
             lastSeq = r.latestSeq
             if let p = r.prompts.last {
                 pendingPrompt = p
+                if p.title == "New plan approved" {
+                    await loadPlan()
+                    planIsNew = true
+                    WKInterfaceDevice.current().play(.notification)
+                }
                 if !isRecording { notify(p) }
             }
         } catch {
             serverOK = false
         }
+    }
+
+    /// Fetch the approved care plan from the server.
+    func loadPlan() async {
+        guard let (data, _) = try? await URLSession.shared.data(from: SERVER_URL.appendingPathComponent("plan")),
+              let r = try? JSONDecoder().decode(PlanResponse.self, from: data) else { return }
+        plan = r.plan
+    }
+
+    /// Start one exercise from the plan, with the plan's rep count.
+    func startPlanItem(_ item: CarePlan.Item) {
+        guard let k = item.kind else { return }
+        planIsNew = false
+        targetReps = max(3, min(20, item.reps))
+        prepare(k)
     }
 
     private func notify(_ p: Prompt) {
@@ -166,6 +230,9 @@ final class WatchModel: NSObject, ObservableObject {
         arm.reset(kind: kind)
         samplesSent = 0
         startDate = Date()
+        cloudSessionId = UUID().uuidString
+        hrValues = []; traceElev = []; traceDir = []; traceHr = []; tick = 0
+        cloudStatus = nil
         elapsedText = "0:00"
         stage = .calibrate
         WKInterfaceDevice.current().play(.start)
@@ -205,6 +272,7 @@ final class WatchModel: NSObject, ObservableObject {
         lastSummary = "\(kind.title): \(arm.reps)/\(targetReps) reps · best \(Int(arm.bestPeak))° · \(elapsedText)"
         recordCompletion(reps: arm.reps)
         Task { _ = try? await post("session/stop", ["by": "watch"]) }
+        if arm.calibrated { uploadSession(endedAt: Date()) } // skip sessions cancelled before calibrating
         sessionId = nil
         stage = .done
         WKInterfaceDevice.current().play(.stop)
@@ -279,6 +347,79 @@ final class WatchModel: NSObject, ObservableObject {
         ]
         if let hr = heartRate { s["heartRate"] = hr }
         buffer.append(s)
+
+        // 25 Hz → 5 Hz trace for the Supabase summary
+        tick += 1
+        if tick % 5 == 0 {
+            traceElev.append((arm.elevation * 10).rounded() / 10)
+            traceDir.append((arm.plane * 10).rounded() / 10)
+            traceHr.append(heartRate.map { $0.rounded() as Any } ?? NSNull())
+            if let hr = heartRate { hrValues.append(hr) }
+        }
+    }
+
+    // MARK: - Supabase upload (one summary row per session; same sessionId replaces, so retries are safe)
+
+    private func uploadSession(endedAt: Date) {
+        guard supabaseConfigured else { cloudStatus = "Cloud not set up"; return }
+        var body: [String: Any] = [
+            "sessionId": cloudSessionId,
+            "patientId": PATIENT_ID,
+            "exercise": kind.rawValue,
+            "arm": arm.isLeftArm ? "left" : "right",
+            "startedAt": Self.iso.string(from: startDate),
+            "endedAt": Self.iso.string(from: endedAt),
+            "targetReps": targetReps,
+            "reps": arm.reps,
+            "attempts": arm.attempts,
+            "bestElevationDeg": (arm.bestPeak * 10).rounded() / 10,
+            "trace": ["hz": 5, "elevationDeg": traceElev, "directionDeg": traceDir, "heartRate": traceHr] as [String: Any]
+        ]
+        if let id = sessionId { body["appSessionId"] = id }
+        if !hrValues.isEmpty {
+            body["avgHr"] = (hrValues.reduce(0, +) / Double(hrValues.count)).rounded()
+            body["maxHr"] = hrValues.max()!.rounded()
+            body["minHr"] = hrValues.min()!.rounded()
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
+        cloudStatus = "Saving…"
+        Task {
+            if await sendToSupabase(data) {
+                cloudStatus = "Saved to cloud"
+            } else {
+                queuePending(data)
+                cloudStatus = "Saved on watch, will retry"
+            }
+        }
+    }
+
+    /// Retry sessions that failed to upload earlier (called on launch).
+    func retryPendingUploads() {
+        guard supabaseConfigured else { return }
+        let pending = defaults.array(forKey: pendingKey) as? [Data] ?? []
+        guard !pending.isEmpty else { return }
+        defaults.removeObject(forKey: pendingKey)
+        Task {
+            for d in pending where !(await sendToSupabase(d)) { queuePending(d) }
+        }
+    }
+
+    private func queuePending(_ data: Data) {
+        var pending = defaults.array(forKey: pendingKey) as? [Data] ?? []
+        pending.append(data)
+        defaults.set(Array(pending.suffix(20)), forKey: pendingKey)
+    }
+
+    private func sendToSupabase(_ data: Data) async -> Bool {
+        var req = URLRequest(url: SUPABASE_URL.appendingPathComponent("rest/v1/rpc/submit_watch_session"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(SUPABASE_ANON_KEY, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(SUPABASE_ANON_KEY)", forHTTPHeaderField: "Authorization")
+        req.httpBody = data
+        req.timeoutInterval = 20
+        guard let (_, resp) = try? await URLSession.shared.data(for: req) else { return false }
+        return (resp as? HTTPURLResponse)?.statusCode == 200
     }
 
     private func flush() {

@@ -2,18 +2,15 @@
  * Shared brand: the name, team line and logo mark used in both the care and patient headers and the
  * landing page. Colours come from the design tokens (bg-primary / text-primary-ink).
  */
-import { Activity } from 'lucide-react';
 import { cx } from './ui/cx';
 
 export const BRAND_NAME = 'RehabTrack';
 export const TEAM_LINE = 'by Ctrl+Alt+Heal';
 
-/** Square logo mark; pass sizing classes to change its size. */
+/** Square logo mark (the Ctrl+Alt+Heal logo, public/logo.png); pass sizing classes to change its size. */
 export function BrandMark({ className = 'h-10 w-10' }: { className?: string }) {
   return (
-    <span className={cx('flex shrink-0 items-center justify-center rounded-xl bg-primary text-primary-ink', className)} aria-hidden>
-      <Activity className="h-3/5 w-3/5" />
-    </span>
+    <img src="/logo.png" alt="" aria-hidden className={cx('shrink-0 rounded-xl object-cover', className)} />
   );
 }
 

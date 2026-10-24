@@ -413,6 +413,38 @@ app.delete('/alert/reminder', (_req, res) => {
   res.json({ ok: true, reminder: null });
 });
 
+// Approved care plan → watch. RehabTrack's care dashboard POSTs here when a doctor approves (or edits)
+// a plan; the watch gets a "New plan approved" prompt and fetches the exercise list from GET /plan.
+const PLAN_EXERCISES = ['arm_raise', 'forward_reach', 'hand_open'];
+let currentPlan = null;
+
+app.get('/plan', (_req, res) => res.json({ ok: true, plan: currentPlan }));
+
+app.post('/plan', (req, res) => {
+  const b = req.body || {};
+  const exercises = Array.isArray(b.exercises)
+    ? b.exercises
+        .filter((e) => e && PLAN_EXERCISES.includes(e.exercise))
+        .map((e) => ({ exercise: e.exercise, reps: Math.max(1, Math.min(50, Math.round(Number(e.reps) || 10))) }))
+    : [];
+  if (!exercises.length) return res.status(400).json({ ok: false, error: 'exercises must list at least one exercise.' });
+  currentPlan = {
+    id: String(b.id || crypto.randomUUID()).slice(0, 64),
+    patientId: String(b.patientId || '').slice(0, 64),
+    patientName: String(b.patientName || '').slice(0, 80),
+    phase: Number.isFinite(Number(b.phase)) ? Number(b.phase) : null,
+    sessionsPerWeek: Number.isFinite(Number(b.sessionsPerWeek)) ? Number(b.sessionsPerWeek) : null,
+    approvedBy: String(b.approvedBy || 'your care team').slice(0, 80),
+    approvedAt: new Date().toISOString(),
+    exercises,
+  };
+  const names = { arm_raise: 'Arm raise', forward_reach: 'Forward reach', hand_open: 'Hand open' };
+  const list = exercises.map((e) => `${names[e.exercise]} ×${e.reps}`).join(', ');
+  const prompt = queueWatchPrompt('New plan approved', `${currentPlan.approvedBy} approved your plan: ${list}`);
+  broadcast('plan', currentPlan);
+  res.status(201).json({ ok: true, plan: currentPlan, prompt });
+});
+
 if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`kyle-motion-server listening on http://localhost:${PORT}`);

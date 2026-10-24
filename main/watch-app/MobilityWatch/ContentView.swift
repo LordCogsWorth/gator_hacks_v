@@ -19,6 +19,50 @@ struct ContentView: View {
 }
 
 // MARK: - Home
+/// Doctor-approved plan: one row per exercise; tap to start it with the plan's reps.
+struct PlanCard: View {
+    let plan: CarePlan
+    let isNew: Bool
+    let onStart: (CarePlan.Item) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 4) {
+                Image(systemName: isNew ? "sparkles" : "list.clipboard.fill")
+                    .foregroundStyle(isNew ? .yellow : Theme.good)
+                Text(isNew ? "New plan approved" : "Your plan").font(.caption.bold())
+            }
+            if let by = plan.approvedBy {
+                Text("By \(by)").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            ForEach(plan.exercises) { item in
+                if let k = item.kind {
+                    Button { onStart(item) } label: {
+                        HStack {
+                            Image(systemName: k.icon).foregroundStyle(Theme.color(k))
+                            Text(k.title).font(.caption2.bold()).lineLimit(1)
+                            Spacer()
+                            Text("×\(item.reps)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    HStack {
+                        Image(systemName: "hand.raised").foregroundStyle(.secondary)
+                        Text("Hand open ×\(item.reps)").font(.caption2)
+                        Spacer()
+                        Text("camera").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 6)
+                }
+            }
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background((isNew ? Color.yellow : Theme.good).opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
 struct HomeView: View {
     @EnvironmentObject var model: WatchModel
     @State private var showReminders = false
@@ -36,7 +80,7 @@ struct HomeView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if let p = model.pendingPrompt {
+                if let p = model.pendingPrompt, p.title != "New plan approved" {
                     HStack(spacing: 6) {
                         Image(systemName: "bell.badge.fill").foregroundStyle(.yellow)
                         Text(p.title).font(.caption2.bold()).lineLimit(2)
@@ -44,6 +88,10 @@ struct HomeView: View {
                     .padding(6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+                }
+
+                if let plan = model.plan {
+                    PlanCard(plan: plan, isNew: model.planIsNew) { model.startPlanItem($0) }
                 }
 
                 ForEach(ExerciseKind.allCases) { k in
@@ -309,6 +357,11 @@ struct DoneView: View {
                 if model.streak > 0 {
                     Label("\(model.streak)-day streak", systemImage: "flame.fill")
                         .font(.caption.bold()).foregroundStyle(.orange)
+                }
+
+                if let cloud = model.cloudStatus {
+                    Label(cloud, systemImage: cloud.hasPrefix("Saved to") ? "checkmark.icloud" : "icloud")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
 
                 Button {

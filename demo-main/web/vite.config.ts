@@ -1,10 +1,45 @@
 import react from '@vitejs/plugin-react';
+import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
+// Kyle's live dashboard (public/kyle/, copied unchanged from Kyle/server/public) runs inside the
+// session screen. It calls its server with root paths (/app.js, /events, /session…), so:
+//  - /app.js is served from public/kyle/app.js
+//  - the server endpoints are proxied to Kyle's motion server, where the Apple Watch posts its data.
+const KYLE_SERVER = process.env.KYLE_SERVER || 'https://gator-hacks-v.onrender.com';
+const KYLE_API = ['/events', '/latest', '^/session(/.*)?$', '/ingest', '/watch/', '/alert', '/simulate', '/health', '^/plan$'];
+
+function kyleDashboard(): Plugin {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
+    if (req.url === '/app.js' || req.url?.startsWith('/app.js?')) req.url = '/kyle/app.js';
+    next();
+  };
+  return {
+    name: 'kyle-dashboard',
+    configureServer(server) {
+      server.middlewares.use(rewrite);
+    },
+    // Same for `vite preview`, which is how Render serves the built app.
+    configurePreviewServer(server) {
+      server.middlewares.use(rewrite);
+    },
+  };
+}
+
+const kyleProxy = Object.fromEntries(
+  KYLE_API.map((p) => [p, { target: KYLE_SERVER, changeOrigin: true, secure: true }]),
+);
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), kyleDashboard()],
   server: {
     port: 5173,
+    proxy: kyleProxy,
+  },
+  // Render: `npx vite preview --host 0.0.0.0 --port $PORT` serves the build with the same proxy.
+  preview: {
+    proxy: kyleProxy,
+    allowedHosts: ['.onrender.com', 'localhost'],
   },
   build: {
     rollupOptions: {

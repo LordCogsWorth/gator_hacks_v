@@ -8,6 +8,7 @@
     "dev:lan": "vite --host",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
+    "start": "vite preview --host 0.0.0.0 --port ${PORT:-4173}",
     "test": "vitest run --passWithNoTests",
     "seed:sql": "tsx scripts/gen-seed-sql.ts",
     "db:test": "node ../supabase/tests/pglite-smoke.mjs",

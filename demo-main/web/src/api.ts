@@ -145,7 +145,33 @@ export async function approvePlan(id: string, body: ApprovePlanBody): Promise<Pl
   const clean = assertValid(validateApproval(body), 'Invalid plan approval');
   const plan = await getSource().approvePlan(id, clean);
   await runRulesAfterWrite(plan.patientId);
+  void notifyWatch(plan);
   return plan;
+}
+
+/**
+ * Tell the patient's Apple Watch about a newly approved plan (via Kyle's motion server, proxied at /plan).
+ * Best effort: the plan is already saved, so a failure here only means no watch notification.
+ */
+async function notifyWatch(plan: Plan): Promise<void> {
+  try {
+    const { patient } = await getPatient(plan.patientId).catch(() => ({ patient: null }));
+    await fetch('/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: plan.id,
+        patientId: plan.patientId,
+        patientName: patient?.name ?? '',
+        phase: plan.phase,
+        sessionsPerWeek: plan.sessionsPerWeek,
+        approvedBy: plan.approvedBy ?? 'Your care team',
+        exercises: plan.exercises.map((e) => ({ exercise: e.exercise, reps: e.reps })),
+      }),
+    });
+  } catch {
+    // Watch server unreachable: nothing else to do.
+  }
 }
 
 export async function dismissPlan(id: string, dismissedBy?: string): Promise<Plan> {
@@ -170,6 +196,7 @@ export async function savePlan(patientId: string, body: SavePlanBody): Promise<P
   const clean = assertValid(validateSavePlan(body), 'Invalid plan');
   const plan = await getSource().savePlan(patientId, clean);
   await runRulesAfterWrite(patientId);
+  void notifyWatch(plan);
   return plan;
 }
 

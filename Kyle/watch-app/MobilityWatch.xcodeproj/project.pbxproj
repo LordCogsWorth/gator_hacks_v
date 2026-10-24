@@ -11,6 +11,7 @@
 		851424B1C09C5B2F8649258A /* FigureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758489EDF90197C204A8CE5A /* FigureView.swift */; };
 		8E40AABDB646558F9B376B96 /* ArmTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4D8F9683E4605B3EA98257 /* ArmTracker.swift */; };
 		98A8A8E53A7087E75E9129F1 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216CDF444ED32C11EF45B814 /* ContentView.swift */; };
+		EAD64D9BB1EF1AA67DCC18EC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 93B6FE95745A17DE4017158C /* Assets.xcassets */; };
 		EEECF6730CCE8BB94EAE1D84 /* MobilityWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1B892AC14A5326A8228B978 /* MobilityWatchApp.swift */; };
 		F6809577995B92D8B369849B /* Reminders.swift in Sources */ = {isa = PBXBuildFile; fileRef = F84083CA161D0D3B1C9B8201 /* Reminders.swift */; };
 		F69600DBFD526AF1C26B0941 /* Exercise.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04C78F5115C1B1E5CF0AF652 /* Exercise.swift */; };
@@ -25,6 +26,7 @@
 		6D4D8F9683E4605B3EA98257 /* ArmTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArmTracker.swift; sourceTree = "<group>"; };
 		758489EDF90197C204A8CE5A /* FigureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FigureView.swift; sourceTree = "<group>"; };
 		8CCBA2C7656EBD6CD2708522 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		93B6FE95745A17DE4017158C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CDB3C037A4B1B134D6F0AEEB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		E03FAA6FC6BC641C7990FAEF /* WatchModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchModel.swift; sourceTree = "<group>"; };
 		E1B892AC14A5326A8228B978 /* MobilityWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilityWatchApp.swift; sourceTree = "<group>"; };
@@ -44,6 +46,7 @@
 			isa = PBXGroup;
 			children = (
 				6D4D8F9683E4605B3EA98257 /* ArmTracker.swift */,
+				93B6FE95745A17DE4017158C /* Assets.xcassets */,
 				216CDF444ED32C11EF45B814 /* ContentView.swift */,
 				04C78F5115C1B1E5CF0AF652 /* Exercise.swift */,
 				758489EDF90197C204A8CE5A /* FigureView.swift */,
@@ -73,6 +76,7 @@
 			buildConfigurationList = 8FBEB15FF681AF2F28BD4DDC /* Build configuration list for PBXNativeTarget "MobilityWatch" */;
 			buildPhases = (
 				8D301F72032941F886EA9E61 /* Sources */,
+				D75232665DC834A003BD3BA8 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -118,6 +122,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D75232665DC834A003BD3BA8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EAD64D9BB1EF1AA67DCC18EC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		8D301F72032941F886EA9E61 /* Sources */ = {

@@ -18,7 +18,7 @@ targets:
     info:
       path: MobilityWatch/Info.plist
       properties:
-        CFBundleDisplayName: Mobility Lab
+        CFBundleDisplayName: Ctrl+Alt+Heal
         WKApplication: true
         WKWatchOnly: true
         UIBackgroundModes: [workout-processing]
@@ -37,3 +37,4 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "4"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

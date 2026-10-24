@@ -1,0 +1,67 @@
+/* Session screen in the style of Kyle's dashboard (Kyle/server/public/index.html):
+   slate gradient, dark glass cards, sky-blue accent, Inter. Scoped to .kyle-scope. */
+.kyle-scope {
+  --k-bg: #0f172a;
+  --k-border: #1f2937;
+  --k-line: #334155;
+  --k-muted: #9ca3af;
+  --k-text: #e5e7eb;
+  --k-ok: #22c55e;
+  --k-bad: #ef4444;
+  --k-accent: #38bdf8;
+  --k-btn: #0369a1;
+  --k-btn-border: #0284c7;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  color: var(--k-text);
+  background: radial-gradient(circle at top, #1e293b, var(--k-bg));
+  border: 1px solid var(--k-border);
+  border-radius: 18px;
+  padding: 18px;
+}
+.kyle-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.kyle-head h1 { margin: 0; font-size: 26px; font-weight: 700; }
+.kyle-head .kyle-sub { color: var(--k-muted); font-size: 14px; }
+.kyle-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--k-line); background: #0b1220; color: var(--k-muted); }
+.kyle-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--k-accent); }
+.kyle-pill.live .dot { background: var(--k-bad); animation: kyleBlink 1s infinite; }
+@keyframes kyleBlink { 50% { opacity: 0.2; } }
+
+.kyle-card { background: rgba(17, 24, 39, 0.92); border: 1px solid var(--k-border); border-radius: 14px; padding: 16px; }
+.kyle-grid { display: grid; gap: 16px; align-items: center; }
+@media (min-width: 768px) { .kyle-grid { grid-template-columns: minmax(0, 320px) 1fr; } }
+
+.kyle-coach { background: #020617; border: 1px solid var(--k-border); border-radius: 14px; padding: 14px; text-align: center; }
+.kyle-coach .label { color: var(--k-muted); font-size: 14px; margin-top: 4px; }
+/* Recolour the coach figure (it uses theme token classes) to Kyle's palette. */
+.kyle-coach .fill-primary { fill: var(--k-accent); }
+.kyle-coach .fill-info { fill: #0369a1; }
+.kyle-coach .fill-border { fill: #1e293b; }
+.kyle-coach .fill-text-muted { fill: #cbd5e1; }
+.kyle-coach .stroke-text-muted { stroke: #64748b; }
+.kyle-coach .fill-surface { fill: #020617; }
+.kyle-coach .stroke-surface { stroke: #020617; }
+
+.kyle-bubble { position: relative; }
+.kyle-bubble h2 { margin: 0 0 4px; font-size: 22px; font-weight: 700; }
+.kyle-bubble .kyle-tip { color: var(--k-muted); font-size: 15px; margin-top: 12px; }
+.kyle-steps { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.kyle-steps li { display: flex; gap: 12px; align-items: flex-start; padding: 8px; border-radius: 10px; font-size: 18px; border: 1px solid transparent; transition: background 0.2s, border-color 0.2s; }
+.kyle-steps li .n { flex: none; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--k-line); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; color: var(--k-accent); }
+.kyle-steps li[aria-current='true'] { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.45); }
+.kyle-steps li[aria-current='true'] .n { background: var(--k-btn); border-color: var(--k-btn-border); color: #fff; }
+
+.kyle-actions { display: grid; gap: 10px; margin-top: 16px; }
+@media (min-width: 640px) {
+  .kyle-actions.two { grid-template-columns: 2fr 1fr; }
+  .kyle-actions.half { grid-template-columns: 1fr 1fr; }
+}
+.kyle-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 52px; font: inherit; font-size: 17px; font-weight: 600; color: var(--k-text); background: #0b1220; border: 1px solid var(--k-line); border-radius: 10px; padding: 10px 18px; cursor: pointer; }
+.kyle-btn:hover:not(:disabled) { border-color: #475569; }
+.kyle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.kyle-btn.primary { background: var(--k-btn); border-color: var(--k-btn-border); color: #fff; font-weight: 700; }
+.kyle-btn.primary:hover { background: #0284c7; }
+.kyle-btn.danger { background: #7f1d1d; border-color: #b91c1c; color: #fee2e2; }
+.kyle-btn.danger:hover { background: #991b1b; }
+
+.kyle-frame { width: 100%; height: max(78vh, 720px); border: 1px solid var(--k-border); border-radius: 14px; background: var(--k-bg); display: block; }
+.kyle-note { color: var(--k-muted); font-size: 13px; margin-top: 8px; }

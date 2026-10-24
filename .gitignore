@@ -12,3 +12,5 @@ demo-main/watch/*.xcodeproj/
 xcuserdata/
 supabase/.temp/
 demo-main/supabase/.temp/
+**/xcuserdata/
+demo-main/web/dist/

@@ -12,8 +12,8 @@ import { PatientDataProvider } from './PatientData';
 import { CheckIn } from './screens/CheckIn';
 import { Dashboard } from './screens/Dashboard';
 import { History } from './screens/History';
+import { KyleSession } from './screens/KyleSession';
 import { SafetyStop } from './screens/SafetyStop';
-import { SessionRun } from './screens/SessionRun';
 import { Summary } from './screens/Summary';
 import { SessionProvider } from './session/SessionContext';
 import './patient.css';
@@ -77,7 +77,7 @@ export default function PatientApp() {
                 <Route index element={<Dashboard />} />
                 <Route path="sessions" element={<History />} />
                 <Route path="checkin" element={<CheckIn />} />
-                <Route path="session" element={<SessionRun />} />
+                <Route path="session" element={<KyleSession />} />
                 <Route path="summary" element={<Summary />} />
                 <Route path="stop" element={<SafetyStop />} />
                 <Route path="*" element={<Navigate to="/patient" replace />} />

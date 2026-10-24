@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ctrl+Alt+Heal</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      :root { color-scheme: dark; --bg:#0f172a; --border:#1f2937; --muted:#9ca3af; --text:#e5e7eb; --ok:#22c55e; --mid:#f59e0b; --bad:#ef4444; --accent:#38bdf8; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: Inter, system-ui, -apple-system, sans-serif; background: radial-gradient(circle at top,#1e293b,var(--bg)); color:var(--text); }
+      .wrap { max-width: 1600px; margin: 0 auto; padding: 16px; }
+      header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+      h1 { margin:0; font-size:24px; }
+      .sub { color:var(--muted); font-size:13px; }
+      .mono { font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+      .label { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+      .big { font-size:44px; font-weight:800; line-height:1.05; }
+      .card { background:rgba(17,24,39,.92); border:1px solid var(--border); border-radius:14px; padding:12px; }
+      .row { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+      .main { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:12px; }
+      .bottom { display:grid; grid-template-columns: 1fr 1fr 2fr; gap:12px; margin-top:12px; }
+      @media (max-width: 1000px) { .main, .bottom { grid-template-columns: 1fr; } }
+      .stage, #three { position:relative; width:100%; aspect-ratio:4/3; margin-top:8px; background:#020617; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+      .stage video, .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+      #three canvas { display:block; width:100%; height:100%; }
+      .banner { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3; width:min(90%,460px); text-align:center; background:rgba(2,6,23,.88); border:1px solid #334155; border-radius:14px; padding:14px; }
+      .scores { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+      .score { border:1px solid var(--border); border-radius:10px; padding:10px; }
+      .bar { height:10px; background:#1f2937; border-radius:999px; overflow:hidden; margin-top:6px; }
+      .bar > div { height:100%; width:0%; background:var(--ok); transition: width .15s; }
+      .toolbar { position:absolute; top:8px; left:8px; z-index:2; display:flex; gap:6px; flex-wrap:wrap; }
+      .legend { position:absolute; bottom:8px; left:8px; z-index:2; display:flex; gap:10px; flex-wrap:wrap; font-size:11px; background:rgba(2,6,23,.8); padding:5px 8px; border-radius:8px; }
+      .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+      .info { position:absolute; right:8px; bottom:8px; z-index:2; width:min(60%,300px); background:rgba(2,6,23,.92); border:1px solid #334155; border-radius:10px; padding:10px; font-size:13px; }
+      button, input { background:#0b1220; color:var(--text); border:1px solid #334155; border-radius:8px; padding:6px 10px; font-size:13px; }
+      button { cursor:pointer; }
+      button.on { background:#0369a1; border-color:#0284c7; }
+      button.primary { background:#0369a1; border-color:#0284c7; font-size:16px; padding:10px 22px; font-weight:700; }
+      button:disabled { opacity:.5; cursor:default; }
+      table { width:100%; border-collapse:collapse; font-size:13px; }
+      td, th { padding:5px 4px; border-bottom:1px solid var(--border); text-align:left; }
+      th { color:var(--muted); font-weight:500; font-size:11px; text-transform:uppercase; }
+      .pill { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; color:#020617; }
+      .ok { color:var(--ok); } .mid { color:var(--mid); } .bad { color:var(--bad); }
+      .stat { display:flex; justify-content:space-between; gap:8px; font-size:13px; padding:3px 0; }
+      canvas.spark { width:100%; height:60px; background:#020617; border:1px solid var(--border); border-radius:8px; margin-top:6px; }
+      #findings p { margin:4px 0; font-size:13px; }
+    </style>
+    <style>
+      .layout { display:grid; grid-template-columns: minmax(0,1fr) 290px; gap:12px; align-items:start; }
+      .watchSide { position:sticky; top:12px; margin-top:12px; }
+      @media (max-width: 1200px) { .layout { grid-template-columns: 1fr; } .watchSide { position:static; } }
+      .watch { position:relative; width:212px; margin:14px auto 0; }
+      .watchCase { background:linear-gradient(145deg,#2b2f36,#0d0f12); border-radius:52px; padding:12px; box-shadow:0 0 0 2px #3a3f47, 0 12px 30px rgba(0,0,0,.6); }
+      .crown { position:absolute; right:-9px; top:62px; width:10px; height:34px; border-radius:4px; background:linear-gradient(90deg,#555,#999); }
+      .screen { background:#000; border-radius:42px; height:236px; overflow:hidden; position:relative; font-family:-apple-system,system-ui,sans-serif; color:#fff; }
+      .ws { position:absolute; inset:0; padding:16px 14px; display:none; flex-direction:column; gap:5px; overflow-y:auto; }
+      .ws.active { display:flex; animation:wsIn .25s ease-out; }
+      @keyframes wsIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+      .wsTime { font-size:34px; font-weight:600; text-align:center; margin-top:6px; }
+      .wsApp { text-align:center; color:#7dd3fc; font-weight:700; font-size:14px; }
+      .wsSub { text-align:center; color:#9ca3af; font-size:11px; margin-bottom:4px; }
+      .wsNotifHead { display:flex; align-items:center; gap:6px; font-size:10px; color:#9ca3af; font-weight:600; }
+      .wsNotifHead .wsNow { margin-left:auto; }
+      .appIcon { width:18px; height:18px; border-radius:50%; background:#0369a1; display:inline-flex; align-items:center; justify-content:center; font-size:10px; }
+      .wsTitle { font-size:15px; font-weight:700; line-height:1.2; }
+      .wsBody { font-size:11.5px; color:#d1d5db; line-height:1.3; }
+      .wsRec { font-size:12px; color:#f87171; font-weight:700; display:flex; align-items:center; gap:6px; }
+      .wsRec .dot { width:8px; height:8px; border-radius:50%; background:#ef4444; animation:blink 1s infinite; }
+      @keyframes blink { 50% { opacity:.2; } }
+      .wsExercise { font-size:13px; font-weight:600; color:#7dd3fc; }
+      .wsBig { font-size:34px; font-weight:700; color:#f87171; }
+      .wsBig small { font-size:11px; color:#9ca3af; }
+      .wsMetric { display:flex; justify-content:space-between; font-size:12px; color:#d1d5db; }
+      .wbtn { width:100%; border:none; border-radius:22px; padding:9px; font-size:14px; font-weight:700; margin-top:4px; color:#fff; }
+      .wbtn.green { background:#16a34a; color:#fff; }
+      .wbtn.red { background:#dc2626; }
+      .wbtn.gray { background:#374151; }
+      .wsFig { width:100%; height:96px; display:block; }
+      .wStep { width:30px; height:30px; border-radius:50%; border:none; background:#374151; color:#fff; font-size:18px; padding:0; }
+      .wBar { height:6px; border-radius:3px; background:#1f2937; overflow:hidden; }
+      .wBar > div { height:100%; width:0; background:#22c55e; transition:width .1s; }
+      .wSel { background:#0b1220; color:#e5e7eb; border:1px solid #334155; border-radius:6px; padding:3px 4px; font-size:12px; }
+      .screen.buzz-good { box-shadow: inset 0 0 0 3px #22c55e; }
+      .screen.buzz-bad { box-shadow: inset 0 0 0 3px #f97316; }
+      .screen.buzz-up { box-shadow: inset 0 0 0 3px #38bdf8; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>Ctrl+Alt+Heal</h1>
+          <div class="sub">Live camera pose tracking · 3D muscle model that follows you · live data from <strong>Kyle's Apple Watch</strong></div>
+        </div>
+        <div class="row">
+          <label class="sub">Height (cm) <input id="heightInput" type="number" min="100" max="250" placeholder="auto" style="width:80px" /></label>
+          <button id="analyzeBtn" class="primary">▶ Analyze</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+      </header>
+      <div id="status" class="sub mono" style="margin-top:6px">Click “Analyze”: it turns on the camera, starts tracking your body, reads your watch, then runs the arm-raise test.</div>
+
+      <div class="layout"><div class="content">
+      <div class="main">
+        <div class="card">
+          <div class="row"><span class="label">Live camera · pose + hand tracking</span><span id="hud" class="mono sub">Pose model: not loaded</span></div>
+          <div class="stage">
+            <video id="video" playsinline muted autoplay></video>
+            <canvas id="overlay"></canvas>
+            <div id="testBanner" class="banner" style="display:none">
+              <div id="testPhase" class="label">Arm-raise test</div>
+              <div id="testBig" class="big">3</div>
+              <div id="testMsg" class="sub"></div>
+              <div class="bar"><div id="testBar"></div></div>
+            </div>
+          </div>
+          <div class="scores">
+            <div class="score">
+              <div class="label">Left arm raise · live</div>
+              <div id="armL" class="big">--%</div>
+              <div class="bar"><div id="armLBar"></div></div>
+              <div id="armLDeg" class="sub mono" style="margin-top:4px">--° of 180° · peak --</div>
+            </div>
+            <div class="score">
+              <div class="label">Right arm raise · live</div>
+              <div id="armR" class="big">--%</div>
+              <div class="bar"><div id="armRBar"></div></div>
+              <div id="armRDeg" class="sub mono" style="margin-top:4px">--° of 180° · peak --</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row"><span class="label">3D muscle model · follows your movement</span><span class="sub">drag to rotate · scroll to zoom · click a muscle</span></div>
+          <div id="three">
+            <div class="toolbar">
+              <button data-view="front">Front</button>
+              <button data-view="back">Back</button>
+              <button data-view="side">Side</button>
+              <button id="focusBtn">Focus affected</button>
+              <button id="labelsBtn">Labels</button>
+              <button id="skelBtn" class="on">Skeleton</button>
+              <button id="followBtn" class="on">Follow me</button>
+            </div>
+            <div class="legend">
+              <span><span class="dot" style="background:#ff2d2d"></span>Likely affected</span>
+              <span><span class="dot" style="background:#ff9f1c"></span>Possibly involved</span>
+              <span><span class="dot" style="background:#ffd166"></span>Minor</span>
+              <span><span class="dot" style="background:#22d3ee"></span>Working now</span>
+            </div>
+            <div id="info" class="info" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="result" class="card" style="display:none; margin-top:12px"></div>
+
+      <div class="bottom">
+        <div class="card">
+          <div class="row"><span class="label">Apple Watch · live</span><span id="wConn" class="mono sub">connecting…</span></div>
+          <div style="margin-top:6px"><span id="hr" class="big">--</span> <span class="sub">BPM</span></div>
+          <canvas id="hrChart" class="spark" width="400" height="60"></canvas>
+          <div class="stat"><span>Wrist speed</span><span id="wSpeed" class="mono">--</span></div>
+          <div class="stat"><span>Acceleration</span><span id="wAccel" class="mono">--</span></div>
+          <div class="stat"><span>Rotation</span><span id="wGyro" class="mono">--</span></div>
+          <div id="wExtra" class="mono sub"></div>
+        </div>
+        <div class="card">
+          <div class="label">Movement & body</div>
+          <div class="stat" style="margin-top:6px"><span>Arm speed (camera)</span><span id="camSpeed" class="mono">--</span></div>
+          <div class="stat"><span>Peak arm speed</span><span id="camPeak" class="mono">--</span></div>
+          <div class="stat"><span>Best arm raise</span><span id="armPeak" class="mono">--</span></div>
+          <div class="stat"><span>Left hand (open · wrist)</span><span id="handL" class="mono">--</span></div>
+          <div class="stat"><span>Right hand (open · wrist)</span><span id="handR" class="mono">--</span></div>
+          <div class="stat"><span>Height</span><span id="heightOut" class="mono">--</span></div>
+          <canvas id="accelChart" class="spark" width="400" height="60"></canvas>
+          <div class="sub">Watch acceleration (g)</div>
+        </div>
+        <div class="card">
+          <div class="label">Joint mobility (% of normal range of motion)</div>
+          <table style="margin-top:6px">
+            <thead><tr><th>Joint</th><th>Now</th><th>Peak</th><th>Mobility</th><th>Status</th></tr></thead>
+            <tbody id="jointTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="label">Weakness findings</div>
+        <div id="findings" style="margin-top:6px"><p class="sub">Click Analyze and raise both arms to find weak muscles.</p></div>
+        <p class="sub" style="margin-top:8px">Estimates from one camera — not a medical diagnosis.</p>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <div class="row">
+          <span class="label">Send exercise to Apple Watch</span>
+          <span id="alertSetupToggle" class="sub" style="cursor:pointer;text-decoration:underline">One-time setup</span>
+        </div>
+        <div id="alertSetup" class="sub" style="display:none;margin-top:8px;line-height:1.6">
+          1. On your iPhone, install <b>ntfy</b> from the App Store (free).<br />
+          2. In ntfy tap <b>+</b>, enter this topic and tap Subscribe: <code id="ntfyTopic" class="mono" style="color:#e5e7eb;background:#0b1220;padding:2px 6px;border-radius:6px;user-select:all">loading…</code><br />
+          3. Allow notifications when iOS asks.<br />
+          4. On iPhone open the <b>Watch</b> app → Notifications → ntfy → <b>Mirror my iPhone</b>.<br />
+          Alerts appear on the watch when your iPhone is locked and the watch is on your wrist.
+          Keep the topic private: anyone who knows it can read these alerts.
+        </div>
+        <div class="row" style="margin-top:10px;justify-content:flex-start">
+          <select id="exSelect" style="background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:8px;padding:7px 10px;font-size:13px;min-width:260px"></select>
+          <select id="exSide" style="background:#0b1220;color:#e5e7eb;border:1px solid #334155;border-radius:8px;padding:7px 10px;font-size:13px">
+            <option value="">Both sides</option>
+            <option value="Left">Left side</option>
+            <option value="Right">Right side</option>
+          </select>
+          <button id="sendExBtn" class="on">⌚ Send to watch now</button>
+        </div>
+        <div id="exPreview" class="sub" style="margin-top:8px"></div>
+        <div class="row" style="margin-top:10px;justify-content:flex-start">
+          <span class="sub">Remind me every</span>
+          <input id="remindMin" type="number" min="1" max="240" value="30" style="width:70px" />
+          <span class="sub">minutes</span>
+          <button id="remindBtn">Start reminders</button>
+          <span id="remindStatus" class="mono sub"></span>
+        </div>
+        <div id="alertLog" class="mono sub" style="margin-top:10px"></div>
+      </div>
+      </div><!-- /content -->
+
+      <aside class="watchSide">
+        <div class="card">
+          <div class="row"><span class="label">Watch app · live preview</span><span id="wsMode" class="mono sub">simulator</span></div>
+          <div class="watch">
+            <div class="crown"></div>
+            <div class="watchCase">
+              <div id="watchScreen" class="screen">
+                <!-- home: pick an exercise -->
+                <div class="ws" data-screen="home">
+                  <div class="wsTime" id="wsClock" style="font-size:22px;margin-top:0">10:09</div>
+                  <div class="wsApp">Ctrl+Alt+Heal</div>
+                  <button class="wbtn gray" data-act="pick" data-kind="side_raise" style="text-align:left">↔ Arm raise to side</button>
+                  <button class="wbtn gray" data-act="pick" data-kind="forward_reach" style="text-align:left">→ Forward reach</button>
+                  <div class="wsMetric" style="align-items:center;margin-top:4px">
+                    <button class="wStep" data-act="repsDown">−</button>
+                    <span><b id="wsRepsSel">10</b> reps</span>
+                    <button class="wStep" data-act="repsUp">+</button>
+                  </div>
+                </div>
+                <!-- notification -->
+                <div class="ws" data-screen="notify">
+                  <div class="wsNotifHead"><span class="appIcon">💪</span><span>MOBILITY LAB</span><span class="wsNow">now</span></div>
+                  <div class="wsTitle" id="wsNTitle">Time for your exercise</div>
+                  <div class="wsBody" id="wsNBody"></div>
+                  <button class="wbtn green" data-act="fromPrompt">Start session</button>
+                  <button class="wbtn gray" data-act="home">Later</button>
+                </div>
+                <!-- demo: example rep -->
+                <div class="ws" data-screen="demo">
+                  <div class="wsTitle" id="wsDemoTitle" style="text-align:center">Arm raise to side</div>
+                  <div class="wsSub" id="wsDemoSub" style="margin:0">10 reps · left arm</div>
+                  <canvas id="wsDemoFig" class="wsFig"></canvas>
+                  <div class="wsBody" id="wsDemoCue" style="text-align:center;font-size:10.5px"></div>
+                  <button class="wbtn green" data-act="begin">▶ Begin session</button>
+                  <button class="wbtn gray" data-act="home">Back</button>
+                </div>
+                <!-- calibrate -->
+                <div class="ws" data-screen="calibrate">
+                  <div class="wsRec"><span class="dot"></span> REC <span class="mono wsTimer">0:00</span></div>
+                  <div class="wsTitle" style="text-align:center">Calibrate</div>
+                  <canvas id="wsCalFig" class="wsFig"></canvas>
+                  <div class="wsBody" style="text-align:center">Hold your arm straight out <b>in front</b></div>
+                  <div class="wBar"><div id="wsCalBar"></div></div>
+                  <div class="wsSub" id="wsCalAngle" style="margin:0">Arm angle 0°</div>
+                  <button class="wbtn red" data-act="stop">Cancel</button>
+                </div>
+                <!-- live tracking -->
+                <div class="ws" data-screen="live">
+                  <div class="wsMetric" style="align-items:baseline">
+                    <b id="wsReps" style="font-size:22px;color:#fff">0/10</b>
+                    <span style="text-align:right;font-size:10px;line-height:1.2"><span class="mono wsTimer">0:00</span><br /><span id="wsHR2" style="color:#f472b6">♥ --</span></span>
+                  </div>
+                  <canvas id="wsLiveFig" class="wsFig"></canvas>
+                  <div class="wsMetric"><b id="wsElev" class="mono">0°</b><span id="wsDir" style="color:#9ca3af">—</span></div>
+                  <div class="wsBody" id="wsHint" style="text-align:center;min-height:28px;font-size:10.5px"></div>
+                  <button class="wbtn red" data-act="stop">■ Stop</button>
+                </div>
+                <!-- summary -->
+                <div class="ws" data-screen="done">
+                  <div style="text-align:center;font-size:30px" id="wsDoneIcon">✅</div>
+                  <div class="wsTitle" style="text-align:center" id="wsDoneTitle">Great work!</div>
+                  <div class="wsSub" id="wsDoneEx" style="margin:0">Arm raise to side</div>
+                  <div class="wsMetric">Reps <span id="wsSumReps" class="mono">0/10</span></div>
+                  <div class="wsMetric">Best height <span id="wsSumBest" class="mono">--</span></div>
+                  <div class="wsMetric">Time <span id="wsSumTime" class="mono">0:00</span></div>
+                  <button class="wbtn green" data-act="home">Done</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:12px;gap:6px">
+            <label class="sub">Arm data
+              <select id="wsSource" class="wSel">
+                <option value="auto">Real watch (camera backup)</option>
+                <option value="watch">Real watch only</option>
+                <option value="camera">Camera only</option>
+                <option value="demo">Demo (scripted, not real)</option>
+              </select>
+            </label>
+            <label class="sub">Watch on
+              <select id="wsWrist" class="wSel">
+                <option value="L">Left wrist</option>
+                <option value="R">Right wrist</option>
+              </select>
+            </label>
+          </div>
+          <div class="sub mono" id="wsSrcNow" style="margin-top:4px">source: —</div>
+
+          <div class="label" style="margin-top:12px">Arm orientation</div>
+          <div class="row" style="gap:6px;margin-top:6px">
+            <div style="flex:1;text-align:center">
+              <canvas id="oriElev" width="240" height="150" style="width:120px;height:75px"></canvas>
+              <div class="sub">Height <b id="oriElevTxt" class="mono" style="color:#e5e7eb">0°</b></div>
+            </div>
+            <div style="flex:1;text-align:center">
+              <canvas id="oriDir" width="240" height="150" style="width:120px;height:75px"></canvas>
+              <div class="sub">Direction <b id="oriDirTxt" class="mono" style="color:#e5e7eb">—</b></div>
+            </div>
+          </div>
+          <div class="sub" style="margin-top:8px">Recorded movement (height over time)</div>
+          <canvas id="oriTrace" width="520" height="160" style="width:100%;height:80px;background:#0b1220;border-radius:8px"></canvas>
+          <div class="sub mono" id="oriRec" style="margin-top:4px">not recording</div>
+
+          <p class="sub" style="margin-top:10px">
+            This preview mirrors the real watch app (<code>Kyle/watch-app</code>). Taps here and on the watch both go to the
+            same server, so starting on either one starts the session everywhere.
+          </p>
+          <div class="row" style="justify-content:flex-start;margin-top:6px">
+            <button id="wsPromptBtn">Send prompt to watch</button>
+          </div>
+          <div class="sub" style="margin-top:8px">Watch app server URL: <span id="wsLan" class="mono" style="color:#e5e7eb">…</span></div>
+        </div>
+      </aside>
+      </div><!-- /layout -->
+    </div>
+
+    <script>
+      // Standalone camera starter: no dependencies, so the camera turns on
+      // even if the 3D / pose libraries are slow or fail to load.
+      (function () {
+        var btn = document.getElementById('analyzeBtn');
+        var status = document.getElementById('status');
+        var video = document.getElementById('video');
+        window.addEventListener('error', function (e) {
+          status.textContent = 'Page error: ' + (e.message || 'a script failed to load (' + (e.target && e.target.src) + ')');
+        }, true);
+        btn.addEventListener('click', async function () {
+          if (window.__camStream) {
+            if (window.__analyze) window.__analyze();
+            return;
+          }
+          if (!window.isSecureContext) {
+            status.textContent = 'Camera blocked: open http://localhost:8080 (not an IP address).';
+            return;
+          }
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            status.textContent = 'This window has no camera access. Open http://localhost:8080 in Safari or Chrome, not the VS Code preview.';
+            return;
+          }
+          status.textContent = 'Requesting camera… click Allow if your browser asks.';
+          try {
+            var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+            window.__camStream = stream;
+            video.srcObject = stream;
+            await video.play();
+            status.textContent = 'Camera on.';
+          } catch (err) {
+            var msg = err.name === 'NotAllowedError'
+              ? 'Camera permission denied. Safari: Settings → Websites → Camera → localhost → Allow. Also check System Settings → Privacy & Security → Camera.'
+              : err.name === 'NotFoundError'
+                ? 'No camera found on this Mac.'
+                : err.name === 'NotReadableError'
+                  ? 'Camera is in use by another app (FaceTime, Zoom, Photo Booth). Close it and try again.'
+                  : err.name + ': ' + err.message;
+            status.textContent = 'Camera error: ' + msg;
+            return;
+          }
+          if (window.__analyze) {
+            window.__analyze();
+          } else {
+            status.textContent = 'Camera on, but the analysis script did not load. Check your internet connection (it downloads the 3D and pose libraries), then refresh.';
+          }
+        });
+      })();
+    </script>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
