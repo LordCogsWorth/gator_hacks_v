@@ -11,6 +11,16 @@ BASE="${1:-http://localhost:8081/api}"
 NOW_MS=$(( $(date +%s) * 1000 ))
 START_MS=$(( NOW_MS - 12 * 60 * 1000 ))   # session started 12 minutes ago
 
+# Preflight: GET /config only exists in the current API. A 404 means the server
+# on this port is still running old code (restart `npm start`), which would
+# save bad data instead of rejecting it.
+CONFIG_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/config" || true)
+if [ "$CONFIG_STATUS" != "200" ]; then
+  echo "!! $BASE/config returned HTTP $CONFIG_STATUS."
+  echo "!! The API is not running, or is running old code. Restart it: cd Raghav/api && npm start"
+  exit 1
+fi
+
 count_sessions() {
   curl -s "$BASE/patients/p-maria/sessions" | grep -o '"id":"sess-' | wc -l | tr -d ' '
 }
