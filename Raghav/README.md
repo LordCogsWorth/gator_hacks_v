@@ -50,6 +50,8 @@ npm run dev
 
 Open **http://localhost:5173**
 
+From another laptop or phone on the same Wi‑Fi, use `npm run dev:lan` (`vite --host`) and open the LAN URL Vite prints (e.g. `http://192.168.x.x:5173`). Point `VITE_API_BASE` at the API’s LAN URL if needed.
+
 You should see a patient list with James and Priya flagged first, then Maria. Click a name for alerts, the suggested plan (review, edit, Approve / Dismiss), and charts. Both pages refresh every 5 seconds while the tab is visible.
 
 Optional: copy `.env.example` to `.env` if the API is not on `http://localhost:8081/api`.
