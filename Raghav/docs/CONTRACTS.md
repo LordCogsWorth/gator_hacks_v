@@ -23,7 +23,7 @@ On input, `POST /api/sessions` also accepts epoch milliseconds (`Date.now()`) fo
 
 Units: angles in degrees, `hand_open` values in % (0–100), distances in metres, durations in seconds, heart rate in bpm, blood pressure in mmHg.
 
-## 2. Camera module (Stuti builds, the patient app calls)
+## 2. Camera module (`Raghav/web/src/camera/` builds it, the patient app calls)
 
 The patient app only talks to a `CameraTracker`. The tracker reports measurements for every frame; it does **not** count reps or build results. Source of truth: `Raghav/web/src/camera/types.ts`.
 
@@ -54,7 +54,10 @@ interface TrackingFrame {            // about 30 per second
 
 Every number is already averaged over the last 5 frames; values from joints with confidence below 0.5 are `null`.
 
-`Raghav/web/src/camera/index.ts` picks the tracker (one line to swap in Stuti's). Until then the app uses `camera/fakeTracker.ts`, which has the same interface plus a demo-only `setDemoOptions({ weakSide, symmetryPct, compensationPct, speed })` that the real tracker doesn't need (callers use `tracker.setDemoOptions?.(…)`).
+Two implementations: `camera/mediapipeTracker.ts` (real: webcam + MediaPipe Pose, plus Hands during `hand_open`; angles from `worldLandmarks`) and `camera/fakeTracker.ts` (made-up motion, plus a demo-only `setDemoOptions({ weakSide, symmetryPct, compensationPct, speed })`; callers use `tracker.setDemoOptions?.(…)`). `Raghav/web/src/camera/index.ts` exports one `tracker` that delegates to one of them:
+
+- **Mode:** `?tracker=real|fake` (remembered for the browser tab); otherwise the fake tracker in demo mode (`?demo=1`), else the real one.
+- **Fallback:** if the real tracker can't start (no camera stream, models fail to load or take over 10 s), it logs a `console.warn` and runs the fake tracker on the same video, so a session never stalls. `onFrame` subscriptions carry over; `setDemoOptions` always drives the fake tracker.
 
 ## 3. ExerciseResult (one per exercise, per arm)
 

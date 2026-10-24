@@ -53,6 +53,7 @@ npm run dev
 | http://localhost:5173/care | Care-team dashboard (`/` redirects here; old `/patients/:id` links still work) |
 | http://localhost:5173/patient | Patient app. First visit asks "Who are you?" (remembered); `?as=p-james` picks a patient directly |
 | http://localhost:5173/patient?demo=1 | Patient app with the **Demo controls** panel (remembered for the browser tab; `?demo=0` turns it off) |
+| http://localhost:5173/patient?tracker=real / ?tracker=fake | Force the real webcam + MediaPipe tracker or the fake one (remembered for the tab). Default: fake with `?demo=1`, real otherwise |
 
 From another laptop or phone on the same Wi‑Fi, use `npm run dev:lan` (`vite --host`) and open the LAN URL Vite prints (e.g. `http://192.168.x.x:5173`). Point `VITE_API_BASE` at the API’s LAN URL if needed. The patient app's webcam only works on `localhost` (browsers block cameras on plain-http LAN addresses); the fake tracker's numbers flow either way.
 
@@ -89,7 +90,7 @@ Lucas's app, backed by the API (no fake data, no login):
 - **History, Messages, Settings:** history comes from the API. Messages (with a demo auto-reply), physicians and phone/gender are **demo-only** in localStorage (`src/patient/localDemo.ts`); the name comes from the API.
 - **Demo controls** (`?demo=1`, bottom of every screen): simulated symmetry (defaults to the patient's latest), simulated compensation (over 50% of weak-arm reps raises an alert), **Speed up demo** (on by default; ≈ 1 minute per session plus the three "I'm ready" clicks).
 
-Camera: the app talks to a `CameraTracker` (`src/camera/types.ts`, CONTRACTS.md §2). `src/camera/index.ts` picks the fake tracker today; swapping in Stuti's is one line. The app counts reps and builds `ExerciseResult` and `ReplayFile` itself (`src/patient/session/repCounter.ts`, `screens/SessionRun.tsx`).
+Camera: the app talks to a `CameraTracker` (`src/camera/types.ts`, CONTRACTS.md §2). `src/camera/index.ts` runs the real one (`mediapipeTracker.ts`: webcam + MediaPipe; WASM from jsDelivr, models from `public/models/` with the Google CDN as fallback) or the fake one (`?demo=1` / `?tracker=fake`), and falls back to the fake one with a console warning if the real one can't start (no camera, models fail or take over 10 s). The app counts reps and builds `ExerciseResult` and `ReplayFile` itself (`src/patient/session/repCounter.ts`, `screens/SessionRun.tsx`).
 
 ## 5. 60-second demo click-path
 
