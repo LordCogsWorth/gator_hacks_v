@@ -10,6 +10,7 @@ import { CameraView } from '../components/CameraView';
 import { ExerciseExplainer } from '../components/ExerciseAvatar';
 import { BigButton } from '../components/Layout';
 import { EXERCISES, SHOULDER_HIKE_LIMIT, TRUNK_LEAN_LIMIT_DEG } from '../data/exercises';
+import { useDemo } from '../demo';
 import { usePatientData } from '../PatientData';
 import { RepCounter } from '../session/repCounter';
 import { useSession, type Step } from '../session/SessionContext';
@@ -61,6 +62,8 @@ function Run({ plan }: { plan: Plan }) {
   const navigate = useNavigate();
   const session = useSession();
   const { patient } = usePatientData();
+  // Demo speed-up: shorter countdowns and pauses (the fake tracker also runs faster).
+  const { fast } = useDemo();
   const healthySide: BodySide = patient.weakSide === 'right' ? 'left' : 'right';
 
   const [step, setStep] = useState<Step>({ exerciseIndex: 0, role: 'healthy' });
@@ -89,11 +92,6 @@ function Run({ plan }: { plan: Plan }) {
   useEffect(() => () => window.clearTimeout(readyTimer.current), []);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
-
-  // The fake tracker needs to know which arm is the weak one (a real tracker ignores this).
-  useEffect(() => {
-    tracker.setDemoOptions?.({ weakSide: patient.weakSide });
-  }, [patient.weakSide]);
 
   // New step: point the tracker at it and reset the round.
   useEffect(() => {
@@ -125,7 +123,7 @@ function Run({ plan }: { plan: Plan }) {
         speak('Go');
         setPhase('active');
       }
-    }, 1500);
+    }, fast ? 400 : 1500);
     return () => window.clearInterval(id);
   }, [phase, step]);
 
@@ -148,7 +146,7 @@ function Run({ plan }: { plan: Plan }) {
       const next = session.next(step);
       if (next) setStep(next);
       else navigate('/patient/summary');
-    }, 3500);
+    }, fast ? 1200 : 3500);
     return () => window.clearTimeout(id);
   }, [phase]);
 
@@ -168,7 +166,7 @@ function Run({ plan }: { plan: Plan }) {
         r.seenSince = Infinity; // only fire once
         setBodySeen(true);
         speak('Ready');
-        readyTimer.current = window.setTimeout(() => setPhase('countdown'), 1500);
+        readyTimer.current = window.setTimeout(() => setPhase('countdown'), fast ? 500 : 1500);
       }
       return;
     }

@@ -36,7 +36,15 @@ export function PatientDataProvider({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [livePlanId, setLivePlanId] = useState<string | null>(null);
-  const [dismissedPlanId, setDismissedPlanId] = useState<string | null>(null);
+  // The banner stays dismissed for that plan on this device.
+  const dismissedKey = `rehabtrack.${patientId}.dismissedPlan`;
+  const [dismissedPlanId, setDismissedPlanId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(dismissedKey);
+    } catch {
+      return null;
+    }
+  });
   const seenPlanId = useRef<string | null | undefined>(undefined);
 
   const apply = useCallback((s: PatientSnapshot) => {
@@ -86,11 +94,19 @@ export function PatientDataProvider({
       sessions,
       summaries: summarize(sessions),
       newPlan: !!plan && plan.id !== dismissedPlanId && (plan.id === livePlanId || approvedSinceLastSession),
-      dismissNewPlan: () => setDismissedPlanId(plan?.id ?? null),
+      dismissNewPlan: () => {
+        const id = plan?.id ?? null;
+        setDismissedPlanId(id);
+        try {
+          if (id) localStorage.setItem(dismissedKey, id);
+        } catch {
+          // Dismissed for this visit only.
+        }
+      },
       refresh: load,
       connectionError,
     };
-  }, [snapshot, dismissedPlanId, livePlanId, load, connectionError]);
+  }, [snapshot, dismissedPlanId, dismissedKey, livePlanId, load, connectionError]);
 
   if (!value) {
     return (

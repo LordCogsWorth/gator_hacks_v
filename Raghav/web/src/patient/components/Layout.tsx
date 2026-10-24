@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { BRAND_NAME, BrandMark } from '../../Brand';
 import { firstName } from '../api';
+import { DemoPanel } from '../demo';
 import { usePatientData } from '../PatientData';
 import { speak, useMuted } from '../voice/useVoice';
 
@@ -94,6 +95,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </p>
           )}
           {children}
+          <DemoPanel />
         </main>
       </div>
 
