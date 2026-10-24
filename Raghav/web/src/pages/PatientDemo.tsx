@@ -207,7 +207,8 @@ function ExerciseStep({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="relative overflow-hidden rounded-3xl bg-slate-800">
+        {/* Below lg the numbers and warning come first, so they stay on screen. */}
+        <div className="relative order-last overflow-hidden rounded-3xl bg-slate-800 lg:order-none">
           <video
             ref={videoRef}
             className={`aspect-video w-full -scale-x-100 object-cover ${cameraLive ? '' : 'invisible'}`}
