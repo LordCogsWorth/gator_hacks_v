@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Bigger base text: every rem-based size scales up for easier reading. */
+html {
+  font-size: 18px;
+}
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: #fff;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 4px solid #1e40af;
+  outline-offset: 3px;
+}
+
+/* Pain slider: thick track and a 60px thumb so it works with one shaky hand. */
+.pain-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a, #facc15, #dc2626);
+}
+.pain-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #fff;
+  border: 6px solid #0f172a;
+  cursor: pointer;
+}
+.pain-slider::-moz-range-thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #fff;
+  border: 6px solid #0f172a;
+  cursor: pointer;
+}
