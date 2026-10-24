@@ -12,7 +12,14 @@
 
 const express = require('express');
 const store = require('./store');
-const { validateSession, validateWatchDaily, validateApproval, WATCH_NUMBER_FIELDS } = require('./validate');
+const {
+  validateSession,
+  validateWatchDaily,
+  validateApproval,
+  validateReplay,
+  WATCH_NUMBER_FIELDS,
+  SIDES,
+} = require('./validate');
 const {
   evaluatePatient,
   avgSymmetry,
@@ -223,6 +230,7 @@ router.get('/patients/:id/sessions', wrap((req, res) => {
       const results = resultsForSession(s.id, allResults);
       return {
         ...s,
+        replays: s.replays || [],
         results,
         symmetry: avgSymmetry(results),
         compensation: avgCompensation(results),
@@ -260,6 +268,7 @@ router.post('/sessions', wrap((req, res) => {
     tiredness: value.tiredness,
     avgHr: null,
     replayFile: null,
+    replays: [],
   };
   const savedResults = value.results.map((r) => ({
     id: store.makeId('er'),
@@ -278,6 +287,94 @@ router.post('/sessions', wrap((req, res) => {
     alertsCreated: ruleResult.alertsCreated,
     planSuggested: ruleResult.planSuggested,
   });
+}));
+
+/** Storage key for one replay: "<sessionId>-<exercise>-<side>". */
+function replayKey(sessionId, exercise, side) {
+  return `${sessionId}-${exercise}-${side}`;
+}
+
+/** Short listing row for a stored replay (no frames). */
+function replaySummary(key, stored) {
+  const { replay, uploadedAt } = stored;
+  return {
+    key,
+    exercise: replay.exercise,
+    side: replay.side,
+    fps: replay.fps,
+    frameCount: replay.frames.length,
+    seconds: Math.round((replay.frames.length / replay.fps) * 10) / 10,
+    warningCount: (replay.warnings || []).length,
+    uploadedAt,
+  };
+}
+
+/**
+ * POST /sessions/:id/replay — upload one ReplayFile (one exercise, one side).
+ * Stored at data/replays/<sessionId>-<exercise>-<side>.json; uploading the same
+ * exercise + side again replaces it. The key is recorded on session.replays.
+ */
+router.post('/sessions/:id/replay', wrap((req, res) => {
+  const { errors, value } = validateReplay(req.body);
+  if (errors.length > 0) {
+    return badRequest(res, 'Invalid replay', errors);
+  }
+  const sessions = store.readAll('sessions');
+  const index = sessions.findIndex((s) => s.id === req.params.id);
+  if (index < 0) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
+  const session = sessions[index];
+  const key = replayKey(session.id, value.exercise, value.side);
+  store.writeReplay(key, value);
+
+  const replays = session.replays || [];
+  if (!replays.includes(key)) {
+    sessions[index] = { ...session, replays: [...replays, key] };
+    store.writeAll('sessions', sessions);
+  }
+
+  res.status(201).json({
+    sessionId: session.id,
+    replays: sessions[index].replays,
+    replay: replaySummary(key, store.readReplay(key)),
+  });
+}));
+
+/** GET /sessions/:id/replays — summaries of the replays stored for a session */
+router.get('/sessions/:id/replays', wrap((req, res) => {
+  const session = store.findById('sessions', req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  const list = (session.replays || [])
+    .map((key) => {
+      const stored = store.readReplay(key);
+      return stored ? replaySummary(key, stored) : null;
+    })
+    .filter(Boolean);
+  res.json(list);
+}));
+
+/** GET /sessions/:id/replays/:exercise/:side — one full ReplayFile */
+router.get('/sessions/:id/replays/:exercise/:side', wrap((req, res) => {
+  const { exercise, side } = req.params;
+  if (!EXERCISES.includes(exercise) || !SIDES.includes(side)) {
+    return res.status(400).json({
+      error: `exercise must be one of ${EXERCISES.join(', ')} and side one of ${SIDES.join(', ')}`,
+    });
+  }
+  const session = store.findById('sessions', req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+  const key = replayKey(session.id, exercise, side);
+  const stored = (session.replays || []).includes(key) ? store.readReplay(key) : null;
+  if (!stored) {
+    return res.status(404).json({ error: 'Replay not found' });
+  }
+  res.json(stored.replay);
 }));
 
 /**

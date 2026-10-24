@@ -235,3 +235,104 @@ describe('POST /plans/:id/dismiss and GET /config', () => {
     assert.equal(config.maxPhase, 4);
   });
 });
+
+describe('replays', () => {
+  const JOINTS = [
+    'nose', 'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist',
+    'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle',
+  ];
+
+  function replay(overrides = {}, frameCount = 30) {
+    const frame = JOINTS.map((_, j) => [0.1 * j, -0.5, 0]);
+    return {
+      fps: 15,
+      exercise: 'arm_raise',
+      side: 'weak',
+      joints: JOINTS,
+      frames: Array.from({ length: frameCount }, () => frame),
+      warnings: [{ frame: 3, type: 'lean' }],
+      ...overrides,
+    };
+  }
+
+  async function newSession() {
+    const res = await post('/sessions', goodSession());
+    return (await res.json()).session;
+  }
+
+  it('new sessions start with an empty replays list', async () => {
+    const session = await newSession();
+    assert.deepEqual(session.replays, []);
+  });
+
+  it('stores a valid replay with 201, records the key, and replaces on re-upload', async () => {
+    const session = await newSession();
+    let res = await post(`/sessions/${session.id}/replay`, replay());
+    assert.equal(res.status, 201);
+    const body = await res.json();
+    const key = `${session.id}-arm_raise-weak`;
+    assert.deepEqual(body.replays, [key]);
+    assert.equal(body.replay.frameCount, 30);
+    assert.equal(body.replay.warningCount, 1);
+    assert.ok(fs.existsSync(path.join(DATA_DIR, 'replays', `${key}.json`)));
+
+    res = await post(`/sessions/${session.id}/replay`, replay({}, 45));
+    assert.equal(res.status, 201);
+    await post(`/sessions/${session.id}/replay`, replay({ side: 'healthy', warnings: undefined }));
+    assert.deepEqual(store.findById('sessions', session.id).replays, [key, `${session.id}-arm_raise-healthy`]);
+
+    const list = await (await fetch(`${base}/sessions/${session.id}/replays`)).json();
+    assert.deepEqual(list.map((r) => [r.side, r.frameCount]), [['weak', 45], ['healthy', 30]]);
+
+    const one = await (await fetch(`${base}/sessions/${session.id}/replays/arm_raise/weak`)).json();
+    assert.equal(one.frames.length, 45);
+    assert.deepEqual(one.joints, JOINTS);
+    assert.equal(one.fps, 15);
+  });
+
+  it('rejects a bad replay with 400, lists the problems, and stores nothing', async () => {
+    const session = await newSession();
+    const badFrames = replay().frames.slice();
+    badFrames[2] = badFrames[2].slice(0, 12);
+    badFrames[4] = badFrames[4].map((p, j) => (j === 0 ? [0, 'x', 0] : p));
+    const res = await post(`/sessions/${session.id}/replay`, replay({
+      fps: 30,
+      exercise: 'jumping',
+      joints: [...JOINTS].reverse(),
+      frames: badFrames,
+      warnings: [{ frame: 99, type: 'lean' }],
+    }));
+    assert.equal(res.status, 400);
+    const body = await res.json();
+    assert.equal(body.error, 'Invalid replay');
+    assert.deepEqual(body.details.map((d) => d.field).sort(), [
+      'exercise', 'fps', 'frames[2]', 'frames[4]', 'joints', 'warnings[0]',
+    ]);
+    assert.deepEqual(store.findById('sessions', session.id).replays, []);
+    assert.equal(fs.existsSync(path.join(DATA_DIR, 'replays', `${session.id}-jumping-weak.json`)), false);
+  });
+
+  it('rejects more than 120 s of frames and an empty recording', async () => {
+    const session = await newSession();
+    let res = await post(`/sessions/${session.id}/replay`, replay({}, 15 * 120 + 1));
+    assert.equal(res.status, 400);
+    assert.equal((await res.json()).details[0].field, 'frames');
+    res = await post(`/sessions/${session.id}/replay`, replay({ warnings: [] }, 0));
+    assert.equal(res.status, 400);
+    // Exactly 120 s is allowed.
+    res = await post(`/sessions/${session.id}/replay`, replay({}, 15 * 120));
+    assert.equal(res.status, 201);
+  });
+
+  it('answers 404 for an unknown session or a replay that was never uploaded', async () => {
+    let res = await post('/sessions/sess-nope/replay', replay());
+    assert.equal(res.status, 404);
+    res = await fetch(`${base}/sessions/sess-nope/replays`);
+    assert.equal(res.status, 404);
+    const session = await newSession();
+    res = await fetch(`${base}/sessions/${session.id}/replays/hand_open/weak`);
+    assert.equal(res.status, 404);
+    res = await fetch(`${base}/sessions/${session.id}/replays/jumping/weak`);
+    assert.equal(res.status, 400);
+  });
+});

@@ -23,6 +23,29 @@ const RESULT_NUMBER_FIELDS = [
   'compRepPct',
 ];
 
+// ReplayFile (see docs/CONTRACTS.md §4): 13 joints in this exact order, 15 fps, ≤ 120 s.
+const REPLAY_JOINTS = [
+  'nose',
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_wrist',
+  'right_wrist',
+  'left_hip',
+  'right_hip',
+  'left_knee',
+  'right_knee',
+  'left_ankle',
+  'right_ankle',
+];
+const REPLAY_FPS = 15;
+const REPLAY_MAX_SECONDS = 120;
+const REPLAY_MAX_FRAMES = REPLAY_FPS * REPLAY_MAX_SECONDS;
+const REPLAY_WARNING_TYPES = ['lean', 'shoulder_hike'];
+// A bad recording can have thousands of bad frames; list only the first few.
+const MAX_FRAME_ERRORS = 5;
+
 // Optional numeric fields on a watch daily row (see docs/CONTRACTS.md §6).
 const WATCH_NUMBER_FIELDS = [
   'steps',
@@ -191,6 +214,88 @@ function validateWatchDaily(body) {
 }
 
 /**
+ * POST /sessions/:id/replay body (a ReplayFile).
+ * value: { fps, exercise, side, joints, frames, warnings } with only contract fields kept.
+ */
+function validateReplay(body) {
+  const errors = [];
+  if (!isPlainObject(body)) {
+    return { errors: [{ field: 'body', message: 'must be a JSON object' }], value: null };
+  }
+  if (body.fps !== REPLAY_FPS) {
+    errors.push({ field: 'fps', message: `must be ${REPLAY_FPS}` });
+  }
+  if (!EXERCISES.includes(body.exercise)) {
+    errors.push({ field: 'exercise', message: `must be one of ${EXERCISES.join(', ')}` });
+  }
+  if (!SIDES.includes(body.side)) {
+    errors.push({ field: 'side', message: `must be one of ${SIDES.join(', ')}` });
+  }
+  if (
+    !Array.isArray(body.joints) ||
+    body.joints.length !== REPLAY_JOINTS.length ||
+    body.joints.some((j, i) => j !== REPLAY_JOINTS[i])
+  ) {
+    errors.push({ field: 'joints', message: `must be the ${REPLAY_JOINTS.length} joints in contract order: ${REPLAY_JOINTS.join(', ')}` });
+  }
+
+  const frames = body.frames;
+  if (!Array.isArray(frames) || frames.length < 1 || frames.length > REPLAY_MAX_FRAMES) {
+    errors.push({
+      field: 'frames',
+      message: `must be an array of 1 to ${REPLAY_MAX_FRAMES} frames (${REPLAY_FPS} fps × ${REPLAY_MAX_SECONDS} s)`,
+    });
+  } else {
+    let frameErrors = 0;
+    for (let f = 0; f < frames.length && frameErrors < MAX_FRAME_ERRORS; f++) {
+      const frame = frames[f];
+      const ok =
+        Array.isArray(frame) &&
+        frame.length === REPLAY_JOINTS.length &&
+        frame.every((p) => Array.isArray(p) && p.length === 3 && p.every(isFiniteNumber));
+      if (!ok) {
+        errors.push({ field: `frames[${f}]`, message: `must be ${REPLAY_JOINTS.length} [x, y, z] triples of finite numbers` });
+        frameErrors++;
+      }
+    }
+  }
+
+  if (body.warnings !== undefined) {
+    const frameCount = Array.isArray(frames) ? frames.length : 0;
+    if (!Array.isArray(body.warnings)) {
+      errors.push({ field: 'warnings', message: 'must be an array when sent' });
+    } else {
+      body.warnings.forEach((w, i) => {
+        if (
+          !isPlainObject(w) ||
+          !Number.isInteger(w.frame) ||
+          w.frame < 0 ||
+          w.frame >= frameCount ||
+          !REPLAY_WARNING_TYPES.includes(w.type)
+        ) {
+          errors.push({
+            field: `warnings[${i}]`,
+            message: `must be { frame: index of a frame, type: ${REPLAY_WARNING_TYPES.join(' | ')} }`,
+          });
+        }
+      });
+    }
+  }
+
+  return {
+    errors,
+    value: {
+      fps: body.fps,
+      exercise: body.exercise,
+      side: body.side,
+      joints: body.joints,
+      frames,
+      warnings: Array.isArray(body.warnings) ? body.warnings.map((w) => ({ frame: w && w.frame, type: w && w.type })) : [],
+    },
+  };
+}
+
+/**
  * POST /plans/:id/approve body. Every field except approvedBy is optional.
  */
 function validateApproval(body) {
@@ -236,9 +341,12 @@ module.exports = {
   EXERCISES,
   SIDES,
   WATCH_NUMBER_FIELDS,
+  REPLAY_JOINTS,
+  REPLAY_MAX_FRAMES,
   toIsoTimestamp,
   isValidDateOnly,
   validateSession,
   validateWatchDaily,
   validateApproval,
+  validateReplay,
 };

@@ -10,6 +10,8 @@ const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = process.env.REHAB_DATA_DIR || path.join(__dirname, 'data');
+// Replays are large, so each one is its own file: replays/<key>.json
+const REPLAY_DIR = path.join(DATA_DIR, 'replays');
 
 /** Make sure the data folder exists. */
 function ensureDataDir() {
@@ -96,6 +98,30 @@ function updateWhere(name, matchFn, updater) {
   return next;
 }
 
+/** Write one replay file (atomic, like writeAll). key = "<sessionId>-<exercise>-<side>". */
+function writeReplay(key, replay) {
+  fs.mkdirSync(REPLAY_DIR, { recursive: true });
+  const file = path.join(REPLAY_DIR, `${key}.json`);
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(replay) + '\n', 'utf8');
+  fs.renameSync(tmp, file);
+}
+
+/** Read one replay file, or null if it doesn't exist. Also returns when it was written. */
+function readReplay(key) {
+  const file = path.join(REPLAY_DIR, `${key}.json`);
+  if (!fs.existsSync(file)) return null;
+  return {
+    replay: JSON.parse(fs.readFileSync(file, 'utf8')),
+    uploadedAt: fs.statSync(file).mtime.toISOString(),
+  };
+}
+
+/** Delete every replay file (seed uses this when it resets demo data). */
+function clearReplays() {
+  fs.rmSync(REPLAY_DIR, { recursive: true, force: true });
+}
+
 /**
  * Make a short unique-ish id like "sess-abc123".
  */
@@ -107,6 +133,7 @@ function makeId(prefix) {
 
 module.exports = {
   DATA_DIR,
+  REPLAY_DIR,
   readAll,
   writeAll,
   findById,
@@ -115,4 +142,7 @@ module.exports = {
   updateWhere,
   makeId,
   ensureDataDir,
+  writeReplay,
+  readReplay,
+  clearReplays,
 };

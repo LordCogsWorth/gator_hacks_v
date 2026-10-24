@@ -176,6 +176,7 @@ function generateSessions(patientId, { skipDays, symmetryAt, compensationAt, pai
       tiredness: 2 + (ago % 4 === 0 ? 1 : 0),
       avgHr: null,
       replayFile: null,
+      replays: [],
     };
     sessions.push(session);
     results.push(...buildResults(session.id, symmetryAt(ago), compensationAt(ago), offsets));
@@ -241,6 +242,7 @@ function seed() {
   ]) {
     store.writeAll(name, []);
   }
+  store.clearReplays();
 
   const patients = buildPatients();
   store.writeAll('patients', patients);

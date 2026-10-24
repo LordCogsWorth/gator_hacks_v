@@ -208,6 +208,7 @@ All sessions for a patient, oldest first, each with nested `results` (ExerciseRe
     "tiredness": 2,
     "avgHr": null,
     "replayFile": null,
+    "replays": ["sess-…-arm_raise-healthy", "sess-…-arm_raise-weak"],
     "results": [
       {
         "id": "er-…",
@@ -292,7 +293,7 @@ Upload a finished exercise session. The API saves it, runs the rules engine (ale
 }
 ```
 
-Send up to 6 results (3 exercises × 2 sides). You do **not** need to send `avgHr` or a replay here. (`avgHr` is always `null` for now: filling it from watch data is not implemented yet.)
+Send up to 6 results (3 exercises × 2 sides). You do **not** need to send `avgHr` or a replay here: upload replays afterwards with `POST /sessions/:id/replay`, using the `session.id` from this response. (`avgHr` is always `null` for now: filling it from watch data is not implemented yet.)
 
 **Validation** (checked before anything is saved — a rejected upload writes nothing):
 
@@ -321,7 +322,8 @@ Extra fields are ignored.
     "pain": 3,
     "tiredness": 2,
     "avgHr": null,
-    "replayFile": null
+    "replayFile": null,
+    "replays": []
   },
   "results": [ /* same shape as above, with id + sessionId filled in */ ],
   "alertsCreated": [],
@@ -329,8 +331,90 @@ Extra fields are ignored.
 }
 ```
 
+`replays` lists the keys of replays uploaded for this session (see [POST /api/sessions/:id/replay](#post-apisessionsidreplay)); it starts empty. `replayFile` is a legacy placeholder kept for compatibility and is always `null`: use `replays` instead. Sessions saved before replays existed have no `replays` field in storage; `GET /patients/:id/sessions` returns `[]` for them.
+
 **Response `400`** — `{ error: "Invalid session", details: [...] }` (see [Errors](#errors))  
 **Response `404`** if `patientId` is unknown
+
+---
+
+## POST /api/sessions/:id/replay  ← Lucas’s patient app calls this (optional)
+
+Upload one 3D skeleton recording (a `ReplayFile`, `Raghav/docs/CONTRACTS.md` §4) for one exercise + side of a saved session. Call it once per exercise per arm, after `POST /sessions` returned the session id. Uploading the same exercise + side again **replaces** the stored one.
+
+Stored at `api/data/replays/<sessionId>-<exercise>-<side>.json`; that key is added to `session.replays`.
+
+**Request body** (≈ 230 bytes per frame; 120 s ≈ 420 KB, well under the 5 MB body limit)
+```json
+{
+  "fps": 15,
+  "exercise": "arm_raise",
+  "side": "weak",
+  "joints": ["nose", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+             "left_wrist", "right_wrist", "left_hip", "right_hip",
+             "left_knee", "right_knee", "left_ankle", "right_ankle"],
+  "frames": [
+    [[0, -0.66, -0.06], [0.18, -0.48, 0], [-0.18, -0.48, 0], "… 13 [x, y, z] triples per frame"]
+  ],
+  "warnings": [{ "frame": 42, "type": "lean" }]
+}
+```
+
+**Validation** (checked before anything is saved):
+
+| Field | Rule |
+| --- | --- |
+| `fps` | must be `15` |
+| `exercise` | `arm_raise` \| `forward_reach` \| `hand_open` |
+| `side` | `weak` \| `healthy` |
+| `joints` | exactly the 13 joint names above, in that order |
+| `frames` | 1 to 1800 frames (15 fps × 120 s); each frame is 13 `[x, y, z]` triples of finite numbers (metres, hip-centred). Only the first 5 bad frames are listed in `details`. |
+| `warnings` | optional array of `{ frame, type }`: `frame` = index of an existing frame, `type` = `lean` \| `shoulder_hike` |
+
+Extra fields are dropped.
+
+**Response `201`**
+```json
+{
+  "sessionId": "sess-…",
+  "replays": ["sess-…-arm_raise-weak"],
+  "replay": {
+    "key": "sess-…-arm_raise-weak",
+    "exercise": "arm_raise",
+    "side": "weak",
+    "fps": 15,
+    "frameCount": 640,
+    "seconds": 42.7,
+    "warningCount": 3,
+    "uploadedAt": "2026-10-24T15:43:00.000Z"
+  }
+}
+```
+
+**Response `400`** — `{ error: "Invalid replay", details: [...] }`  
+**Response `404`** — `{ error: "Session not found" }`  
+**Response `413`** — body over 5 MB
+
+---
+
+## GET /api/sessions/:id/replays
+
+Summaries of the replays stored for a session (no frames), in upload order. Same shape as `replay` in the upload response.
+
+**Response `200`** — `[{ key, exercise, side, fps, frameCount, seconds, warningCount, uploadedAt }]`  
+**Response `404`** — `{ error: "Session not found" }`
+
+---
+
+## GET /api/sessions/:id/replays/:exercise/:side
+
+One full `ReplayFile`, exactly as uploaded (contract fields only).
+
+**Example:** `GET /api/sessions/sess-…/replays/arm_raise/weak`
+
+**Response `200`** — the `ReplayFile`  
+**Response `400`** — `exercise` or `side` isn't a valid value  
+**Response `404`** — `{ error: "Session not found" }` or `{ error: "Replay not found" }`
 
 ---
 
@@ -548,4 +632,5 @@ Seed dates are relative to today, so alerts and suggestions look the same whatev
 2. Point your app at `http://localhost:8081/api` (or Raghav’s Wi‑Fi IP).
 3. On home screen: `GET /patients/p-maria/plan` (or whichever patient you are demoing).
 4. After a session: `POST /sessions` with the body shape above (`Date.now()` is fine for `startedAt` / `endedAt`). On `400`, log `details`: it lists every bad field.
-5. Do not invent extra fields — stick to this file and `Raghav/docs/CONTRACTS.md`.
+5. Optional: for each exercise + side, `POST /sessions/:id/replay` with the camera module's `replay()` output.
+6. Do not invent extra fields — stick to this file and `Raghav/docs/CONTRACTS.md`.
