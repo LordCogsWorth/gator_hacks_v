@@ -1,0 +1,101 @@
+/* Patient area styles. PatientApp adds the `patient-area` class to <html> while it is
+   mounted, so these page-wide rules never reach the care dashboard. */
+
+/* Bigger base text: every rem-based size scales up for easier reading. */
+html.patient-area {
+  font-size: 18px;
+  color-scheme: dark;
+}
+html.patient-area body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: #0a0a0a;
+}
+html.patient-area button:focus-visible,
+html.patient-area a:focus-visible,
+html.patient-area input:focus-visible {
+  outline: 4px solid #f5f5f5;
+  outline-offset: 3px;
+}
+
+/* Pain slider: thick track and a 60px thumb so it works with one shaky hand. */
+.pain-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a, #facc15, #dc2626);
+}
+.pain-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #0a0a0a;
+  border: 6px solid #f5f5f5;
+  cursor: pointer;
+}
+.pain-slider::-moz-range-thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #0a0a0a;
+  border: 6px solid #f5f5f5;
+  cursor: pointer;
+}
+
+/* Coach avatar animations (components/ExerciseAvatar.tsx). Origins are set inline in SVG units. */
+.coach-raise,
+.coach-reach-upper,
+.coach-reach-fore,
+.coach-finger,
+.coach-thumb {
+  transform-box: view-box;
+  animation-duration: 3.2s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+.coach-raise { animation-name: coach-raise; }
+.coach-reach-upper { animation-name: coach-reach-upper; }
+.coach-reach-fore { animation-name: coach-reach-fore; }
+.coach-finger { animation-name: coach-finger; }
+.coach-thumb { animation-name: coach-thumb; }
+.coach-spark { animation: coach-spark 3.2s ease-in-out infinite; }
+
+@keyframes coach-raise {
+  0%, 12% { transform: rotate(0deg); }
+  50%, 62% { transform: rotate(-95deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes coach-reach-upper {
+  0%, 12% { transform: rotate(0deg); }
+  50%, 62% { transform: rotate(-82deg); }
+  100% { transform: rotate(0deg); }
+}
+@keyframes coach-reach-fore {
+  0%, 12% { transform: rotate(-90deg); }
+  50%, 62% { transform: rotate(0deg); }
+  100% { transform: rotate(-90deg); }
+}
+@keyframes coach-finger {
+  0%, 12% { transform: scaleY(0.3); }
+  50%, 62% { transform: scaleY(1); }
+  100% { transform: scaleY(0.3); }
+}
+@keyframes coach-thumb {
+  0%, 12% { transform: rotate(35deg); }
+  50%, 62% { transform: rotate(0deg); }
+  100% { transform: rotate(35deg); }
+}
+@keyframes coach-spark {
+  0%, 30% { opacity: 0; }
+  50%, 62% { opacity: 1; }
+  80%, 100% { opacity: 0; }
+}
+
+/* Keep Lucas's system font for headings (the care area sets IBM Plex Sans on h1–h3). */
+html.patient-area h1,
+html.patient-area h2,
+html.patient-area h3 {
+  font-family: inherit;
+  letter-spacing: normal;
+}

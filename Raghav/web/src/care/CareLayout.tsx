@@ -4,7 +4,7 @@ import { BRAND_NAME, BrandMark } from '../Brand';
 
 /** Care-team area shell: light clinical header + page content. */
 export default function CareLayout() {
-  // From a patient's detail page, the patient-app link opens that patient.
+  // From a patient's detail page, the patient-app link opens the app as that patient.
   const detailMatch = useMatch('/care/patients/:id');
   const patientId = detailMatch?.params.id ?? 'p-maria';
 
@@ -26,11 +26,11 @@ export default function CareLayout() {
           <div className="flex items-baseline gap-5">
             <p className="hidden text-sm text-slate-500 sm:block">Home progress between clinic visits</p>
             <Link
-              to={`/patient/${patientId}`}
+              to={`/patient?as=${patientId}`}
               className="text-sm text-slate-400 underline-offset-2 hover:text-teal-deep hover:underline"
-              title="Stand-in for the patient app (mock camera)"
+              title="Open the patient app as this patient (demo, no login)"
             >
-              Demo patient view
+              Patient app
             </Link>
           </div>
         </div>
