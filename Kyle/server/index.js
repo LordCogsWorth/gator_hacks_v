@@ -134,14 +134,57 @@ app.post('/ingest/batch', (req, res) => {
     const error = validateSample(s);
     if (error) return res.status(400).json({ ok: false, error: `samples[${i}]: ${error}` });
   }
+  return res.status(201).json({ ok: true, accepted: ingestBatch(samples) });
+});
+
+function ingestBatch(samples) {
   const receivedAt = new Date().toISOString();
   const lines = samples.map((s) => ({ receivedAt, ...s }));
   fs.appendFileSync(DATA_FILE, lines.map((r) => JSON.stringify(r)).join('\n') + '\n', 'utf8');
   for (const r of lines) trackSessionSample(r);
   latestSample = lines[lines.length - 1];
   broadcastMotion(latestSample);
-  return res.status(201).json({ ok: true, accepted: lines.length });
-});
+  return lines.length;
+}
+
+// ============================================================
+// Supabase Realtime relay: the watch broadcasts its live samples to the
+// "watch-live" channel over the internet, so live mirroring works even when
+// the watch can't reach this Mac on the local network (e.g. campus Wi-Fi).
+// ============================================================
+const RELAY_URL = process.env.SUPABASE_URL || 'https://qyzrzofwmdxcxztbgrix.supabase.co';
+const RELAY_KEY = process.env.SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5enJ6b2Z3bWR4Y3h6dGJncml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4NzE4NzAsImV4cCI6MjEwODQ0Nzg3MH0.nbbC-DJkSMr8fCsJaNcNjIx1ipyFXsyXy9dOl1nQtrs';
+
+function startRelay() {
+  if (typeof WebSocket !== 'function' || !RELAY_KEY) return;
+  const wsUrl = RELAY_URL.replace(/^http/, 'ws') + `/realtime/v1/websocket?apikey=${RELAY_KEY}&vsn=1.0.0`;
+  let ref = 0;
+  let heartbeat;
+  const ws = new WebSocket(wsUrl);
+  const send = (topic, event, payload) => ws.send(JSON.stringify({ topic, event, payload, ref: String(++ref) }));
+  ws.onopen = () => {
+    send('realtime:watch-live', 'phx_join', {
+      config: { broadcast: { self: false }, presence: { key: '' }, postgres_changes: [] },
+      access_token: RELAY_KEY,
+    });
+    heartbeat = setInterval(() => send('phoenix', 'heartbeat', {}), 25_000);
+    console.log('Supabase relay: listening for live watch data');
+  };
+  ws.onmessage = (m) => {
+    let msg;
+    try { msg = JSON.parse(m.data); } catch { return; }
+    if (msg.event !== 'broadcast' || msg.payload?.event !== 'samples') return;
+    const samples = (msg.payload.payload?.samples || []).filter((s) => !validateSample(s));
+    if (samples.length) ingestBatch(samples);
+  };
+  ws.onclose = () => {
+    clearInterval(heartbeat);
+    setTimeout(startRelay, 3000); // reconnect
+  };
+  ws.onerror = () => ws.close();
+}
+startRelay();
 
 // ============================================================
 // Recording sessions (started from the watch or the dashboard)

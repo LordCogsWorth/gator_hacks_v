@@ -4,10 +4,12 @@
 // live Apple Watch panel) → "I'm done with this exercise" moves on; after the last one, the summary.
 import { useEffect, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import type { Plan } from '../../types';
+import type { BodySide, Plan, Side } from '../../types';
 import { Avatar } from '../components/ExerciseAvatar';
 import { EXERCISES } from '../data/exercises';
+import { usePatientData } from '../PatientData';
 import { useSession } from '../session/SessionContext';
+import { roundReps, roundToStats, saveWatchSession, useWatchRecorder } from '../session/watchRecorder';
 import { speak, speakLines, useSpeakOnMount } from '../voice/useVoice';
 import './kyle-session.css';
 
@@ -42,23 +44,53 @@ function NoExercises() {
 
 function Run({ plan }: { plan: Plan }) {
   const navigate = useNavigate();
+  const session = useSession();
+  const { patient } = usePatientData();
+  const watch = useWatchRecorder();
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>('explain');
+  const [role, setRole] = useState<Side>('healthy');
+  const [live, setLive] = useState({ reps: 0, best: 0, samples: 0 });
   const info = EXERCISES[plan.exercises[index].exercise];
   const reps = plan.exercises[index].reps;
   const last = index + 1 >= plan.exercises.length;
+  const healthySide: BodySide = patient.weakSide === 'right' ? 'left' : 'right';
+  const side: BodySide = role === 'healthy' ? healthySide : patient.weakSide;
+
+  useEffect(
+    () => watch.subscribe((r) => setLive({ reps: roundReps(r), best: Math.round(r.bestElevation), samples: r.samples })),
+    [], // eslint-disable-line react-hooks/exhaustive-deps -- subscribe once
+  );
 
   const start = () => {
-    speak(`Starting ${info.title}. Follow the camera and your watch.`);
+    speak(`Starting ${info.title}. Use your stronger ${healthySide} arm first. Follow the camera and your watch.`);
+    setRole('healthy');
+    watch.reset();
     setPhase('live');
   };
 
+  /** Save this arm's watch data into today's session (and as a watch session row). */
+  const saveRound = () => {
+    const r = watch.current();
+    const stats = roundToStats(r, info.id);
+    if (stats) session.addRound({ exerciseIndex: index, role }, stats, null);
+    void saveWatchSession(r, patient.id, info.id, side, reps);
+  };
+
   const done = () => {
+    saveRound();
+    if (role === 'healthy') {
+      setRole('weak');
+      watch.reset();
+      speak(`Now your weaker ${patient.weakSide} arm. Try to match your other arm.`);
+      return;
+    }
     if (last) {
       speak('Great work. Session complete.');
       navigate('/patient/summary');
     } else {
       setIndex((i) => i + 1);
+      setRole('healthy');
       setPhase('explain');
     }
   };
@@ -76,7 +108,9 @@ function Run({ plan }: { plan: Plan }) {
         </div>
         <span className={`kyle-pill${phase === 'live' ? ' live' : ''}`}>
           <span className="dot" />
-          {phase === 'live' ? 'Live · camera + Apple Watch' : 'Coach'}
+          {phase === 'live'
+            ? `${role === 'healthy' ? 'Stronger' : 'Weaker'} arm (${side}) · recording`
+            : 'Coach'}
         </span>
       </div>
 
@@ -84,6 +118,17 @@ function Run({ plan }: { plan: Plan }) {
         <Explainer key={info.id} info={info} onStart={start} />
       ) : (
         <>
+          <div className="kyle-watchbar" role="status">
+            <span>
+              ⌚ Watch reps <b>{live.reps}</b>/{reps}
+            </span>
+            <span>
+              Best angle <b>{live.best}°</b>
+            </span>
+            <span className={live.samples ? 'ok' : 'wait'}>
+              {live.samples ? 'Receiving watch data' : 'Waiting for your watch… start the exercise on it'}
+            </span>
+          </div>
           <iframe
             className="kyle-frame"
             src="/kyle/index.html"
@@ -91,14 +136,14 @@ function Run({ plan }: { plan: Plan }) {
             allow="camera; microphone; autoplay; fullscreen"
           />
           <p className="kyle-note">
-            Start the same exercise on your Apple Watch. Its arm angle and reps show in the watch panel (source: Real watch).
+            Put the watch on your {side} wrist and start the same exercise on it. This arm's watch data is saved when you press the button below.
           </p>
         </>
       )}
 
       <div className="kyle-actions half">
-        <button className="kyle-btn" disabled={phase !== 'live'} onClick={done}>
-          {last ? 'Finish session' : "I'm done with this exercise"}
+        <button className="kyle-btn primary" disabled={phase !== 'live'} onClick={done}>
+          {role === 'healthy' ? 'Save & switch to weaker arm' : last ? 'Save & finish session' : 'Save & next exercise'}
         </button>
         <button className="kyle-btn danger" onClick={() => navigate('/patient/stop?reason=dizzy')}>
           I feel dizzy or unwell

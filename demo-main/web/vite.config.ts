@@ -6,7 +6,7 @@ import { defineConfig } from 'vitest/config';
 // session screen. It calls its server with root paths (/app.js, /events, /session…), so:
 //  - /app.js is served from public/kyle/app.js
 //  - the server endpoints are proxied to Kyle's motion server, where the Apple Watch posts its data.
-const KYLE_SERVER = process.env.KYLE_SERVER || 'https://gator-hacks-v.onrender.com';
+const KYLE_SERVER = process.env.KYLE_SERVER || 'http://localhost:8080';
 const KYLE_API = ['/events', '/latest', '^/session(/.*)?$', '/ingest', '/watch/', '/alert', '/simulate', '/health', '^/plan$'];
 
 function kyleDashboard(): Plugin {

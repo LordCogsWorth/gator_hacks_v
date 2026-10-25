@@ -65,3 +65,7 @@
 
 .kyle-frame { width: 100%; height: max(78vh, 720px); border: 1px solid var(--k-border); border-radius: 14px; background: var(--k-bg); display: block; }
 .kyle-note { color: var(--k-muted); font-size: 13px; margin-top: 8px; }
+.kyle-watchbar { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; margin-bottom: 10px; padding: 10px 14px; background: rgba(17, 24, 39, 0.92); border: 1px solid var(--k-border); border-radius: 12px; font-size: 16px; }
+.kyle-watchbar b { color: var(--k-accent); font-size: 20px; }
+.kyle-watchbar .ok { color: var(--k-ok); margin-left: auto; font-size: 14px; }
+.kyle-watchbar .wait { color: #f59e0b; margin-left: auto; font-size: 14px; }

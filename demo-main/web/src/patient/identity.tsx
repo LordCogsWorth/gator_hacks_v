@@ -11,7 +11,7 @@ import { cx } from '../ui/cx';
 import { Spinner } from '../ui/Spinner';
 import { useSpeakOnMount } from './voice/useVoice';
 
-export const DEFAULT_PATIENT_ID = 'p-maria';
+export const DEFAULT_PATIENT_ID: string = import.meta.env.VITE_DEFAULT_PATIENT_ID || 'p-maria';
 const KEY = 'rehabtrack.patientId';
 
 export function storedPatientId(): string | null {

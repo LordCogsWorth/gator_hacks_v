@@ -6,14 +6,14 @@ import WatchKit
 
 // ⚠️ Set this to the "Watch app server URL" printed when the Node server starts
 // (your Mac's Wi-Fi address). The watch and Mac must be on the same network.
-let SERVER_URL = URL(string: "https://gator-hacks-v.onrender.com")!
+let SERVER_URL = URL(string: "http://10.192.252.41:8080")!
 let WATCH_SOURCE = "Kyle's Apple Watch"
 
 // Supabase (justin/watch-sessions). Each finished session is saved as one row in `watch_sessions`.
 // Fill in from Supabase → Project Settings → API. Uploads are skipped while these are placeholders.
-let SUPABASE_URL = URL(string: "https://rplaymproqabobpmtygv.supabase.co")!
-let SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJwbGF5bXByb3FhYm9icG10eWd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4NDAxOTEsImV4cCI6MjEwODQxNjE5MX0.8PcCingVnqJNJDkBR3M55Fj_SzU3EIyC2VWs7lPqwbQ"
-let PATIENT_ID = "p-kyle"
+let SUPABASE_URL = URL(string: "https://qyzrzofwmdxcxztbgrix.supabase.co")!
+let SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF5enJ6b2Z3bWR4Y3h6dGJncml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4NzE4NzAsImV4cCI6MjEwODQ0Nzg3MH0.nbbC-DJkSMr8fCsJaNcNjIx1ipyFXsyXy9dOl1nQtrs"
+let PATIENT_ID = "p-test"
 var supabaseConfigured: Bool { !SUPABASE_ANON_KEY.hasPrefix("YOUR-") && !SUPABASE_URL.absoluteString.contains("YOUR-PROJECT") }
 
 struct Prompt: Decodable { let seq: Int; let id: String; let title: String; let message: String }
@@ -88,6 +88,8 @@ final class WatchModel: NSObject, ObservableObject {
     private var sessionId: String?
     private var startDate = Date()
     private var buffer: [[String: Any]] = []
+    /// After the Mac fails to answer, skip it (use the Supabase relay) until this time.
+    private var directDownUntil = Date.distantPast
     private var flushTimer: Timer?
     private var clockTimer: Timer?
     private var pollTimer: Timer?
@@ -400,8 +402,15 @@ final class WatchModel: NSObject, ObservableObject {
         guard !pending.isEmpty else { return }
         defaults.removeObject(forKey: pendingKey)
         Task {
-            for d in pending where !(await sendToSupabase(d)) { queuePending(d) }
+            for d in pending where !(await sendToSupabase(Self.withCurrentPatient(d))) { queuePending(d) }
         }
+    }
+
+    /// Older queued sessions may carry a previous patient id; re-send them as the current PATIENT_ID.
+    private static func withCurrentPatient(_ data: Data) -> Data {
+        guard var body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return data }
+        body["patientId"] = PATIENT_ID
+        return (try? JSONSerialization.data(withJSONObject: body)) ?? data
     }
 
     private func queuePending(_ data: Data) {
@@ -427,13 +436,35 @@ final class WatchModel: NSObject, ObservableObject {
         let batch = buffer
         buffer.removeAll()
         Task {
-            if (try? await post("ingest/batch", ["samples": batch])) != nil {
+            let tryDirect = Date() >= directDownUntil
+            if tryDirect, (try? await post("ingest/batch", ["samples": batch])) != nil {
+                samplesSent += batch.count
+                serverOK = true
+            } else if await relayLive(batch) {
+                if tryDirect { directDownUntil = Date().addingTimeInterval(30) }
+                // Mac not reachable on this network: relayed through Supabase Realtime instead.
                 samplesSent += batch.count
                 serverOK = true
             } else {
                 serverOK = false
             }
         }
+    }
+
+    /// Broadcast live samples on Supabase Realtime channel "watch-live" (the Mac server listens to it).
+    private func relayLive(_ batch: [[String: Any]]) async -> Bool {
+        guard supabaseConfigured else { return false }
+        let body: [String: Any] = ["messages": [["topic": "watch-live", "event": "samples", "payload": ["samples": batch]]]]
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else { return false }
+        var req = URLRequest(url: SUPABASE_URL.appendingPathComponent("realtime/v1/api/broadcast"))
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(SUPABASE_ANON_KEY, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(SUPABASE_ANON_KEY)", forHTTPHeaderField: "Authorization")
+        req.httpBody = data
+        req.timeoutInterval = 5
+        guard let (_, resp) = try? await URLSession.shared.data(for: req) else { return false }
+        return ((resp as? HTTPURLResponse)?.statusCode ?? 0) < 300
     }
 
     @discardableResult

@@ -70,6 +70,93 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 
 const omitUndefined = (o: Json) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 
+/** Watch rounds within this gap of each other count as one session. */
+const WATCH_GROUP_GAP_MS = 30 * 60_000;
+
+/**
+ * Turn watch_sessions rows (one row = one arm, one exercise) into session + result rows so watch workouts
+ * appear in the Sessions list, charts and the doctor dashboard like camera sessions do.
+ * Rounds are grouped by appSessionId, else by time (≤ 30 min apart). Rounds that overlap a camera session
+ * are skipped (the camera session already covers them).
+ */
+export function watchToSessions(
+  watchRows: Json[], patients: Json[], cameraSessions: Json[],
+): { sessions: Json[]; results: Json[] } {
+  const weakSide = new Map(patients.map((p) => [String(p.id), String(p.weak_side ?? '')]));
+  const camera = cameraSessions.map((s) => ({
+    pid: String(s.patient_id), t0: Date.parse(String(s.started_at)), t1: Date.parse(String(s.ended_at)),
+  }));
+  const rows = watchRows
+    .map(watchSessionFromRow)
+    .filter((w) => weakSide.has(w.patientId) && (w.reps ?? 0) > 0)
+    .filter((w) => {
+      const t0 = Date.parse(w.startedAt), t1 = Date.parse(w.endedAt);
+      return !camera.some((c) => c.pid === w.patientId && t0 <= c.t1 && t1 >= c.t0);
+    })
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+
+  const groups: (typeof rows)[] = [];
+  const open = new Map<string, (typeof rows)>();
+  for (const w of rows) {
+    const key = w.appSessionId ? `${w.patientId}|app|${w.appSessionId}` : `${w.patientId}|time`;
+    const g = open.get(key);
+    const last = g?.[g.length - 1];
+    if (g && (w.appSessionId || Date.parse(w.startedAt) - Date.parse(last!.endedAt) <= WATCH_GROUP_GAP_MS)) {
+      g.push(w);
+    } else {
+      const ng = [w];
+      groups.push(ng);
+      open.set(key, ng);
+    }
+  }
+
+  const sessions: Json[] = [];
+  const results: Json[] = [];
+  for (const g of groups) {
+    const id = `watch-${g[0].sessionId}`;
+    const hrs = g.map((w) => w.avgHr).filter((v): v is number => v != null);
+    sessions.push({
+      id,
+      patient_id: g[0].patientId,
+      started_at: g[0].startedAt,
+      ended_at: g.reduce((m, w) => (w.endedAt > m ? w.endedAt : m), g[0].endedAt),
+      pain: null,
+      tiredness: null,
+      stop_reason: null,
+      avg_hr: hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null,
+    });
+    // Best round per exercise + side.
+    const best = new Map<string, (typeof g)[number]>();
+    for (const w of g) {
+      const side = !w.arm || w.arm === weakSide.get(w.patientId) ? 'weak' : 'healthy';
+      const k = `${w.exercise}|${side}`;
+      const prev = best.get(k);
+      if (!prev || (w.bestElevationDeg ?? 0) > (prev.bestElevationDeg ?? 0)) best.set(k, w);
+    }
+    for (const [k, w] of best) {
+      const [exercise, side] = k.split('|');
+      const dur = Math.max(0, (Date.parse(w.endedAt) - Date.parse(w.startedAt)) / 1000);
+      results.push({
+        id: `${id}-${exercise}-${side}`,
+        session_id: id,
+        exercise,
+        side,
+        best_value: w.bestElevationDeg ?? 0,
+        reps: w.reps ?? 0,
+        sec_per_rep: w.reps ? Math.round((dur / w.reps) * 10) / 10 : 0,
+        smoothness: 1,
+        fatigue: 1,
+        trunk_lean_max: 0,
+        shoulder_hike_max: 0,
+        comp_rep_pct: 0,
+        reach_cm: null,
+        closed_min: null,
+      });
+    }
+  }
+  return { sessions, results };
+}
+
 export class SupabaseSource implements DataSource {
   readonly mode = 'supabase' as const;
   private listeners = new Set<() => void>();
@@ -118,7 +205,7 @@ export class SupabaseSource implements DataSource {
 
   async loadSnapshot(patientId: string): Promise<Snapshot> {
     const c = await this.c();
-    const [patient, sessions, results, replays, watch, alerts, plans] = await Promise.all([
+    const [patient, sessions, results, replays, watch, alerts, plans, watchSessions] = await Promise.all([
       q<Json | null>(c.from('patients').select('*').eq('id', patientId).maybeSingle()),
       q<Json[]>(c.from('sessions').select('*').eq('patient_id', patientId).order('started_at')),
       q<Json[]>(
@@ -128,14 +215,33 @@ export class SupabaseSource implements DataSource {
       q<Json[]>(c.from('watch_daily').select('*').eq('patient_id', patientId).order('date')),
       q<Json[]>(c.from('alerts').select('*').eq('patient_id', patientId).order('created_at')),
       q<Json[]>(c.from('plans').select('*').eq('patient_id', patientId).order('created_at')),
+      this.watchSessionRows(c, patientId),
     ]);
     if (!patient) throw notFound('Unknown patient');
-    return this.buildSnapshots([patient], sessions ?? [], results ?? [], replays ?? [], watch ?? [], alerts ?? [], plans ?? [])[0];
+    const w = watchToSessions(watchSessions, [patient], sessions ?? []);
+    const allSessions = [...(sessions ?? []), ...w.sessions].sort((a, b) =>
+      String(a.started_at).localeCompare(String(b.started_at)),
+    );
+    return this.buildSnapshots(
+      [patient], allSessions, [...(results ?? []), ...w.results], replays ?? [], watch ?? [], alerts ?? [], plans ?? [],
+    )[0];
+  }
+
+  /** watch_sessions rows (no trace); [] if the table is unavailable so camera data still loads. */
+  private async watchSessionRows(c: SupabaseClient, patientId?: string): Promise<Json[]> {
+    try {
+      let query = c.from('watch_sessions').select(WATCH_SESSION_COLUMNS);
+      if (patientId) query = query.eq('patient_id', patientId);
+      return (await q<Json[]>(query.order('started_at') as unknown as Result<Json[]>)) ?? [];
+    } catch (e) {
+      console.warn('watch_sessions not loaded:', e);
+      return [];
+    }
   }
 
   async loadAllSnapshots(): Promise<Snapshot[]> {
     const c = await this.c();
-    const [patients, sessions, results, replays, watch, alerts, plans] = await Promise.all([
+    const [patients, sessions, results, replays, watch, alerts, plans, watchSessions] = await Promise.all([
       q<Json[]>(c.from('patients').select('*').order('name')),
       q<Json[]>(c.from('sessions').select('*').order('started_at')),
       q<Json[]>(c.from('exercise_results').select('*').order('id')),
@@ -143,8 +249,15 @@ export class SupabaseSource implements DataSource {
       q<Json[]>(c.from('watch_daily').select('*').order('date')),
       q<Json[]>(c.from('alerts').select('*').order('created_at')),
       q<Json[]>(c.from('plans').select('*').order('created_at')),
+      this.watchSessionRows(c),
     ]);
-    return this.buildSnapshots(patients ?? [], sessions ?? [], results ?? [], replays ?? [], watch ?? [], alerts ?? [], plans ?? []);
+    const w = watchToSessions(watchSessions, patients ?? [], sessions ?? []);
+    const allSessions = [...(sessions ?? []), ...w.sessions].sort((a, b) =>
+      String(a.started_at).localeCompare(String(b.started_at)),
+    );
+    return this.buildSnapshots(
+      patients ?? [], allSessions, [...(results ?? []), ...w.results], replays ?? [], watch ?? [], alerts ?? [], plans ?? [],
+    );
   }
 
   async listWatchSessions(patientId: string): Promise<WatchSession[]> {

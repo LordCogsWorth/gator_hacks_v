@@ -8,6 +8,7 @@ import { applyArea } from '../ui/theme';
 import { Layout } from './components/Layout';
 import { demoEnabled, DemoProvider, rememberDemo } from './demo';
 import { IdentityProvider, rememberPatientId, resolvePatientId, storedPatientId, WhoAreYou } from './identity';
+import './patient.css';
 import { PatientDataProvider } from './PatientData';
 import { CheckIn } from './screens/CheckIn';
 import { Dashboard } from './screens/Dashboard';
@@ -16,7 +17,6 @@ import { KyleSession } from './screens/KyleSession';
 import { SafetyStop } from './screens/SafetyStop';
 import { Summary } from './screens/Summary';
 import { SessionProvider } from './session/SessionContext';
-import './patient.css';
 
 const URL_FLAGS = ['as', 'demo', 'pick'];
 

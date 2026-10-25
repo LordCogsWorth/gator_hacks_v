@@ -2,12 +2,13 @@
 import { ChevronDown, Home, Play } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Exercise, StopReason } from '../../types';
+import type { Exercise, StopReason, WatchSession } from '../../types';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { cx } from '../../ui/cx';
 import { EmptyState } from '../../ui/EmptyState';
 import type { SessionSummary } from '../api';
+import { useWatchSessions, WatchRound } from '../components/WatchWorkouts';
 import { EXERCISES } from '../data/exercises';
 import { usePatientData } from '../PatientData';
 import { useSpeakOnMount } from '../voice/useVoice';
@@ -20,7 +21,8 @@ const dateLabel = (iso: string) =>
 
 export function History() {
   const navigate = useNavigate();
-  const { summaries, plan } = usePatientData();
+  const { summaries, plan, patient } = usePatientData();
+  const watchRounds = useWatchSessions(patient.id) ?? [];
   const sessions = [...summaries].reverse();
   // Columns: the plan's exercises (all three if there's no plan yet).
   const exercises = plan ? plan.exercises.map((e) => e.exercise) : (Object.keys(EXERCISES) as Exercise[]);
@@ -50,6 +52,7 @@ export function History() {
             key={s.session.id}
             s={s}
             exercises={exercises}
+            watchRounds={watchRoundsFor(s, watchRounds)}
             open={open === s.session.id}
             onToggle={() => setOpen(open === s.session.id ? null : s.session.id)}
           />
@@ -63,9 +66,25 @@ export function History() {
   );
 }
 
-function SessionCard({ s, exercises, open, onToggle }: { s: SessionSummary; exercises: Exercise[]; open: boolean; onToggle: () => void }) {
+/** Watch rounds that belong to this session (same patient, inside its time window ± 5 min). */
+function watchRoundsFor(s: SessionSummary, rounds: WatchSession[]): WatchSession[] {
+  const pad = 5 * 60_000;
+  const t0 = Date.parse(s.session.startedAt) - pad;
+  const t1 = Date.parse(s.session.endedAt) + pad;
+  return rounds
+    .filter((w) => Date.parse(w.startedAt) <= t1 && Date.parse(w.endedAt) >= t0)
+    .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+}
+
+function SessionCard({
+  s, exercises, watchRounds, open, onToggle,
+}: { s: SessionSummary; exercises: Exercise[]; watchRounds: WatchSession[]; open: boolean; onToggle: () => void }) {
   const tired = TIREDNESS.find((t) => t.v === s.session.tiredness);
-  const stopped = s.average === null;
+  const fromWatch = s.session.id.startsWith('watch-') || watchRounds.length > 0;
+  // "Stopped early" only when nothing was recorded; a one-arm watch session still has results.
+  const stopped = s.average === null && s.session.results.length === 0 && watchRounds.length === 0;
+  const best = (ex: Exercise) =>
+    s.session.results.filter((r) => r.exercise === ex).sort((a, b) => b.bestValue - a.bestValue)[0];
   const reason = s.session.stopReason ? STOP_WORDS[s.session.stopReason] : (s.session.pain ?? 0) >= PAIN_STOP_AT ? 'pain' : null;
   const detailsId = `session-${s.session.id}`;
 
@@ -80,7 +99,10 @@ function SessionCard({ s, exercises, open, onToggle }: { s: SessionSummary; exer
       >
         <div className="flex items-center gap-4">
           <div className="min-w-0 flex-1">
-            <div className="text-lg text-text-muted">Session {s.number}</div>
+            <div className="text-lg text-text-muted">
+              Session {s.number}
+              {fromWatch && <span className="ml-2">⌚ Apple Watch</span>}
+            </div>
             <div className="text-2xl font-semibold">{dateLabel(s.session.startedAt)}</div>
           </div>
           <ChevronDown className={cx('h-8 w-8 shrink-0 text-text-muted transition-transform', open && 'rotate-180')} aria-hidden />
@@ -91,12 +113,21 @@ function SessionCard({ s, exercises, open, onToggle }: { s: SessionSummary; exer
           </Badge>
         ) : (
           <div className="mt-3 flex flex-wrap gap-3">
-            {exercises.map((ex) => (
-              <div key={ex} className="rounded-control bg-surface-2 px-4 py-2">
-                <div className="text-base text-text-muted">{EXERCISES[ex].title}</div>
-                <div className="text-2xl font-semibold tabular-nums">{s.symmetry[ex] !== undefined ? `${s.symmetry[ex]}%` : '—'}</div>
-              </div>
-            ))}
+            {exercises.map((ex) => {
+              const b = best(ex);
+              const value =
+                s.symmetry[ex] !== undefined
+                  ? `${s.symmetry[ex]}%`
+                  : b
+                    ? `${Math.round(b.bestValue)}${EXERCISES[ex].unit} · ${b.reps} reps`
+                    : '—';
+              return (
+                <div key={ex} className="rounded-control bg-surface-2 px-4 py-2">
+                  <div className="text-base text-text-muted">{EXERCISES[ex].title}</div>
+                  <div className="text-2xl font-semibold tabular-nums">{value}</div>
+                </div>
+              );
+            })}
           </div>
         )}
       </button>
@@ -137,12 +168,20 @@ function SessionCard({ s, exercises, open, onToggle }: { s: SessionSummary; exer
                         <td className="py-2 pr-4">{EXERCISES[ex].title}</td>
                         <td className="py-2 pr-4 tabular-nums">{h ? `${Math.round(h.bestValue)}${unit}` : '—'}</td>
                         <td className="py-2 pr-4 tabular-nums">{w ? `${Math.round(w.bestValue)}${unit}` : '—'}</td>
-                        <td className="py-2 tabular-nums">{w ? w.reps : '—'}</td>
+                        <td className="py-2 tabular-nums">{w ? w.reps : h ? h.reps : '—'}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {watchRounds.length > 0 && (
+            <div className="space-y-5 border-t border-border pt-4">
+              <div className="text-lg font-semibold">⌚ Recorded by your Apple Watch</div>
+              {watchRounds.map((w) => (
+                <WatchRound key={w.id} w={w} />
+              ))}
             </div>
           )}
         </div>

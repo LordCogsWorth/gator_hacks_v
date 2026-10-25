@@ -10,6 +10,7 @@ import { Card } from '../../ui/Card';
 import { StatTile } from '../../ui/StatTile';
 import { daysUntil, firstName, streakDays, weekAgoSummary } from '../api';
 import { ProgressChart } from '../components/ProgressChart';
+import { WatchWorkouts } from '../components/WatchWorkouts';
 import { EXERCISES } from '../data/exercises';
 import { usePatientData } from '../PatientData';
 import { useSession } from '../session/SessionContext';
@@ -27,8 +28,10 @@ export function Dashboard() {
   const name = firstName(patient.name);
 
   const today = new Date().toDateString();
-  // A session stopped for pain or dizziness doesn't count as done.
-  const doneToday = summaries.some((s) => s.average !== null && new Date(s.session.startedAt).toDateString() === today);
+  // A session stopped for pain or dizziness doesn't count as done; a watch-only session (one arm) does.
+  const doneToday = summaries.some(
+    (s) => (s.average !== null || s.session.results.length > 0) && new Date(s.session.startedAt).toDateString() === today,
+  );
   const thisWeek = sessions.filter((s) => Date.now() - new Date(s.startedAt).getTime() < WEEK_MS).length;
   const checkin = daysUntil(plan?.nextCheckin ?? patient.nextCheckin);
   const streak = streakDays(sessions);
@@ -95,8 +98,10 @@ export function Dashboard() {
         value={latest ? latest.average : '—'}
         unit={latest ? '%' : undefined}
         delta={delta !== null ? { value: delta, goodWhen: 'up', label: 'from last week' } : undefined}
-        hint={latest ? 'Your latest session, all exercises' : 'Finish a session to see this'}
+        hint={latest ? 'Your latest session, all exercises' : 'Do the same exercise with both arms to see this'}
       />
+
+      <WatchWorkouts patientId={patient.id} />
 
       <ProgressChart />
     </div>
