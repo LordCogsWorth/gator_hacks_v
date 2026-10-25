@@ -3,7 +3,7 @@ import type { Patient, WatchDaily, WatchSession } from '../../types';
 import { EXERCISE_LABELS } from '../../types';
 import { ChartCard, EXERCISE_SERIES, LegendItem, useChartTheme } from '../../ui';
 import { shortDate, shortDateTime } from '../dates';
-import { chartProps, MARGIN } from './chartProps';
+import { chartProps, dotsOf, fitDomain, MARGIN } from './chartProps';
 
 const WATCH_EXERCISES = ['arm_raise', 'forward_reach'] as const;
 
@@ -35,6 +35,10 @@ export function WatchCharts({ watch, watchSessions, patient }: { watch: WatchDai
     }));
   const exercisesPresent = WATCH_EXERCISES.filter((ex) => watchSessions.some((s) => s.exercise === ex));
 
+  // Each axis fitted to this patient's own range.
+  const ratioDomain = fitDomain(rows.map((r) => r.useRatio), { lo: 0, hi: 1, step: 0.05, minSpan: 0.2 });
+  const elevationDomain = fitDomain(watchSessions.map((s) => s.bestElevationDeg), { lo: 0, hi: 180, step: 10, minSpan: 30, zero: true });
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <ChartCard
@@ -49,7 +53,7 @@ export function WatchCharts({ watch, watchSessions, patient }: { watch: WatchDai
           <XAxis dataKey="date" {...p.axis} />
           <YAxis domain={['dataMin - 5', 'dataMax + 5']} allowDecimals={false} width={40} {...p.axis} />
           <Tooltip {...p.tooltip} formatter={(v) => `${v} bpm`} />
-          <Line type="monotone" dataKey="restingHr" name="Resting HR" stroke={t.info} strokeWidth={2.5} dot={false} connectNulls />
+          <Line type="monotone" dataKey="restingHr" name="Resting HR" stroke={t.info} strokeWidth={3} dot={dotsOf(rows, 'restingHr')} connectNulls />
         </LineChart>
       </ChartCard>
 
@@ -77,8 +81,8 @@ export function WatchCharts({ watch, watchSessions, patient }: { watch: WatchDai
           />
           <Tooltip {...p.tooltip} formatter={(v) => `${v} mmHg`} />
           <ReferenceLine y={patient.bpLimitSys} stroke={t.target} strokeDasharray="6 4" strokeWidth={2} ifOverflow="extendDomain" />
-          <Line type="monotone" dataKey="bpSys" name="Systolic" stroke={t.warning} strokeWidth={2.5} dot={false} connectNulls />
-          <Line type="monotone" dataKey="bpDia" name="Diastolic" stroke={t.primary} strokeWidth={2.5} dot={false} connectNulls />
+          <Line type="monotone" dataKey="bpSys" name="Systolic" stroke={t.warning} strokeWidth={3} dot={dotsOf(rows, 'bpSys')} connectNulls />
+          <Line type="monotone" dataKey="bpDia" name="Diastolic" stroke={t.primary} strokeWidth={3} dot={dotsOf(rows, 'bpDia')} connectNulls />
         </LineChart>
       </ChartCard>
 
@@ -101,7 +105,7 @@ export function WatchCharts({ watch, watchSessions, patient }: { watch: WatchDai
           <YAxis yAxisId="min" orientation="right" allowDecimals={false} width={36} {...p.axis} />
           <Tooltip {...p.tooltip} />
           <Bar yAxisId="steps" dataKey="steps" name="Steps" fill={t.info} fillOpacity={0.55} radius={[3, 3, 0, 0]} />
-          <Line yAxisId="min" type="monotone" dataKey="exerciseMin" name="Exercise min" stroke={t.warning} strokeWidth={2.5} dot={false} connectNulls />
+          <Line yAxisId="min" type="monotone" dataKey="exerciseMin" name="Exercise min" stroke={t.warning} strokeWidth={3} dot={dotsOf(rows, 'exerciseMin')} connectNulls />
         </ComposedChart>
       </ChartCard>
 
@@ -120,19 +124,19 @@ export function WatchCharts({ watch, watchSessions, patient }: { watch: WatchDai
         <LineChart data={rows} margin={MARGIN}>
           <CartesianGrid {...p.grid} />
           <XAxis dataKey="date" {...p.axis} />
-          <YAxis yAxisId="min" allowDecimals={false} width={40} {...p.axis} />
-          <YAxis yAxisId="ratio" orientation="right" domain={[0, 1]} width={40} {...p.axis} />
+          <YAxis yAxisId="min" domain={[(m: number) => Math.max(0, Math.floor(m - 5)), (m: number) => Math.ceil(m + 5)]} allowDecimals={false} width={40} {...p.axis} />
+          <YAxis yAxisId="ratio" orientation="right" domain={ratioDomain} width={40} allowDataOverflow {...p.axis} />
           <Tooltip {...p.tooltip} />
-          <Line yAxisId="min" type="monotone" dataKey="weakArmActiveMin" name="Active min" stroke={t.primary} strokeWidth={2.5} dot={false} connectNulls />
+          <Line yAxisId="min" type="monotone" dataKey="weakArmActiveMin" name="Active min" stroke={t.primary} strokeWidth={3} dot={dotsOf(rows, 'weakArmActiveMin')} connectNulls />
           <Line
             yAxisId="ratio"
             type="monotone"
             dataKey="useRatio"
             name="Use ratio"
             stroke={t.info}
-            strokeWidth={2.5}
+            strokeWidth={3}
             strokeDasharray="6 3"
-            dot={false}
+            dot={dotsOf(rows, 'useRatio')}
             connectNulls
           />
         </LineChart>
@@ -151,7 +155,7 @@ export function WatchCharts({ watch, watchSessions, patient }: { watch: WatchDai
         <BarChart data={sessionRows} margin={MARGIN}>
           <CartesianGrid {...p.grid} />
           <XAxis dataKey="label" {...p.axis} />
-          <YAxis domain={[0, 180]} unit="°" width={44} {...p.axis} />
+          <YAxis domain={elevationDomain} unit="°" width={44} allowDataOverflow {...p.axis} />
           <Tooltip {...p.tooltip} formatter={(v) => `${v}°`} />
           {exercisesPresent.map((ex) => (
             <Bar key={ex} dataKey={ex} name={EXERCISE_LABELS[ex]} fill={t.series[EXERCISE_SERIES[ex]]} radius={[3, 3, 0, 0]} maxBarSize={36} />

@@ -1,5 +1,5 @@
-// The patient app, mounted at /patient/*. Who it acts as: ?as=<patientId>, the remembered id, else p-maria
-// (identity.tsx); ?pick=1 shows the "Who are you?" picker. Everything else comes from the API (PatientData.tsx).
+// The patient app, mounted at /patient/*. Who it acts as: ?as=<patientId>, else the remembered id, else the
+// "Who are you?" picker (identity.tsx); ?pick=1 shows the picker too. Everything else comes from the API (PatientData.tsx).
 // ?demo=1 shows the demo controls (demo.tsx) for the rest of the browser-tab session.
 import { useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useSearchParams } from 'react-router-dom';

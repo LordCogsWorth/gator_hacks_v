@@ -93,6 +93,35 @@
       .screen.buzz-bad { box-shadow: inset 0 0 0 3px #f97316; }
       .screen.buzz-up { box-shadow: inset 0 0 0 3px #38bdf8; }
     </style>
+    <style>
+      /* Embedded in the patient session (?embed=patient): no watch panels, the coach page shows the steps. */
+      html.embed header h1, html.embed header .sub, html.embed .watchSide, html.embed #watchLiveCard, html.embed #watchSendCard { display:none; }
+      /* The session page sizes the frame to this content, so the whole page scrolls as one. */
+      html.embed, html.embed body { background:transparent; overflow:hidden; }
+      html.embed .wrap { padding:0; max-width:none; }
+      html.embed header { justify-content:flex-start; }
+      .embedOnly { display:none; }
+      html.embed .embedOnly { display:inline-block; }
+      html.embed header > .row { flex:1; }
+      html.embed #skipBtn { margin-left:auto; }
+      /* Session finished: one summary button across the whole row. */
+      #summaryBtn { display:none; }
+      html.embed.finished header > .row > :not(#summaryBtn) { display:none; }
+      html.embed.finished #summaryBtn { display:block; flex:1; }
+      /* The coach column takes the right side, so keep camera and 3D model side by side a bit longer. */
+      @media (max-width: 1000px) and (min-width: 640px) { html.embed .main { grid-template-columns:1fr 1fr; } }
+      html.embed header button { font-size:16px; padding:10px 22px; font-weight:700; min-height:46px; }
+      button.danger { background:#b91c1c; border-color:#dc2626; color:#fff; }
+      html.embed #status { font-size:15px; font-family:inherit; color:var(--text); }
+      /* The patient app's fonts (the session page copies their @font-face rules in). */
+      html.embed body, html.embed button, html.embed input, html.embed select, html.embed table { font-family:'Source Sans 3','Segoe UI',Helvetica,Arial,sans-serif; }
+      html.embed h1, html.embed h2, html.embed .label, html.embed .big { font-family:'IBM Plex Sans','Segoe UI',Helvetica,Arial,sans-serif; letter-spacing:-0.01em; }
+      html.embed .label { font-size:12px; font-weight:600; }
+      html.embed .layout { grid-template-columns: 1fr; }
+      html.embed .bottom { grid-template-columns: 1fr 2fr; }
+      @media (max-width: 1000px) { html.embed .bottom { grid-template-columns: 1fr; } }
+    </style>
+    <script>if (/[?&]embed=/.test(location.search)) document.documentElement.classList.add('embed');</script>
   </head>
   <body>
     <div class="wrap">
@@ -104,7 +133,11 @@
         <div class="row">
           <label class="sub">Height (cm) <input id="heightInput" type="number" min="100" max="250" placeholder="auto" style="width:80px" /></label>
           <button id="analyzeBtn" class="primary">▶ Analyze</button>
+          <button id="pauseBtn" class="embedOnly">❚❚ Pause</button>
           <button id="resetBtn">Reset</button>
+          <button id="stopBtn" class="danger embedOnly">■ Stop</button>
+          <button id="skipBtn" class="embedOnly">Skip Exercise ⏭</button>
+          <button id="summaryBtn" class="primary">View my summary →</button>
         </div>
       </header>
       <div id="status" class="sub mono" style="margin-top:6px">Click “Analyze”: it turns on the camera, starts tracking your body, reads your watch, then runs the arm-raise test.</div>
@@ -165,7 +198,7 @@
       <div id="result" class="card" style="display:none; margin-top:12px"></div>
 
       <div class="bottom">
-        <div class="card">
+        <div class="card" id="watchLiveCard">
           <div class="row"><span class="label">Apple Watch · live</span><span id="wConn" class="mono sub">connecting…</span></div>
           <div style="margin-top:6px"><span id="hr" class="big">--</span> <span class="sub">BPM</span></div>
           <canvas id="hrChart" class="spark" width="400" height="60"></canvas>
@@ -200,7 +233,7 @@
         <p class="sub" style="margin-top:8px">Estimates from one camera — not a medical diagnosis.</p>
       </div>
 
-      <div class="card" style="margin-top:12px">
+      <div class="card" id="watchSendCard" style="margin-top:12px">
         <div class="row">
           <span class="label">Send exercise to Apple Watch</span>
           <span id="alertSetupToggle" class="sub" style="cursor:pointer;text-decoration:underline">One-time setup</span>
@@ -375,13 +408,22 @@
             return;
           }
           status.textContent = 'Requesting camera… click Allow if your browser asks.';
+          // Embedded in the RehabTrack session: the page itself asks for the camera, because browsers don't
+          // always show the permission prompt for a request made inside a frame.
+          var host = window.parent !== window && window.parent.__rehabtrackGetCamera;
+          var slow = setTimeout(function () {
+            status.textContent = 'Still waiting for the camera. If no prompt appeared, click the camera icon in the address bar and choose Allow.';
+          }, 6000);
           try {
-            var stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+            var constraints = { video: { facingMode: 'user' }, audio: false };
+            var stream = await (host ? host(constraints) : navigator.mediaDevices.getUserMedia(constraints));
+            clearTimeout(slow);
             window.__camStream = stream;
             video.srcObject = stream;
             await video.play();
             status.textContent = 'Camera on.';
           } catch (err) {
+            clearTimeout(slow);
             var msg = err.name === 'NotAllowedError'
               ? 'Camera permission denied. Safari: Settings → Websites → Camera → localhost → Allow. Also check System Settings → Privacy & Security → Camera.'
               : err.name === 'NotFoundError'

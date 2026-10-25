@@ -2,13 +2,14 @@ import { useEffect } from 'react';
 import { Link, Outlet, useMatch } from 'react-router-dom';
 import { BRAND_NAME, BrandLockup, TEAM_LINE } from '../Brand';
 import { DataModeBadge, SupabaseHealthBanner, ThemeToggle } from '../ui';
+import { SignOutButton } from '../ui/SignOutButton';
 import { useRulesSweep } from './useRulesSweep';
 
-/** Care-team area shell: header (brand, team line, data mode, theme) + page + footer. */
+/** Care-team area shell: header (brand, data mode, theme, sign out) + page + footer with the team line. */
 export default function CareLayout() {
-  // From a patient's detail page, the patient-app link opens the app as that patient.
+  // From a patient's detail page, the patient-app link opens the app as that patient; elsewhere, the picker.
   const detailMatch = useMatch('/care/patients/:id/*');
-  const patientId = detailMatch?.params.id ?? 'p-maria';
+  const patientAppLink = detailMatch?.params.id ? `/patient?as=${detailMatch.params.id}` : '/patient?pick=1';
 
   useRulesSweep();
 
@@ -24,18 +25,18 @@ export default function CareLayout() {
             <Link to="/care" className="rounded-control no-underline">
               <BrandLockup area="Care team" />
             </Link>
-            <span className="hidden text-sm text-text-muted lg:inline">{TEAM_LINE}</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <DataModeBadge className="hidden sm:inline-flex" />
             <Link
-              to={`/patient?as=${patientId}`}
+              to={patientAppLink}
               className="inline-flex min-h-tap items-center rounded-control px-2 text-sm font-semibold text-primary underline-offset-2 hover:underline"
               title="Open the patient app as this patient (demo, no login)"
             >
               Patient app
             </Link>
             <ThemeToggle area="care" />
+            <SignOutButton />
           </div>
         </div>
       </header>

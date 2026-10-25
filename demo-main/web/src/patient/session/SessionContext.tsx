@@ -1,5 +1,6 @@
 // Holds today's session while the patient moves through the screens, and saves it to the API once.
 import { createContext, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ApiError } from '../../data/errors';
 import type { ExerciseResult, Plan, ReplayFile, Side, StopReason } from '../../types';
 import { saveSession, type SaveInput, type SaveOutcome } from '../api';
 import { usePatientData } from '../PatientData';
@@ -24,7 +25,8 @@ export type SaveState =
   | { status: 'idle' }
   | { status: 'saving' }
   | { status: 'saved'; outcome: SaveOutcome }
-  | { status: 'failed'; error: string };
+  /** `network`: the care team couldn't be reached (worth a retry); otherwise the session was turned down. */
+  | { status: 'failed'; error: string; network: boolean };
 
 interface SessionValue {
   /** The plan as it was when the session began; a plan approved mid-session applies to the next one. */
@@ -118,7 +120,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
             },
             (e: unknown) => {
               saving.current = null; // allow a retry
-              setSaveState({ status: 'failed', error: e instanceof Error ? e.message : 'Could not save' });
+              setSaveState({
+                status: 'failed',
+                error: e instanceof Error ? e.message : 'Could not save',
+                network: !(e instanceof ApiError) || e.code === 'network',
+              });
               throw e;
             },
           );

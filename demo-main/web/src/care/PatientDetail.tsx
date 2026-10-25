@@ -188,7 +188,11 @@ export default function PatientDetail() {
 
       <AlertsPanel alerts={openAlerts} patient={patient} onChanged={(m) => afterChange(m)} />
 
-      <WeeklySummaryCard patientId={patient.id} />
+      <WeeklySummaryCard
+        patientId={patient.id}
+        firstName={patient.name.split(' ')[0]}
+        data={{ detail, sessions, watch, watchSessions }}
+      />
 
       {suggestedPlan ? (
         <SuggestedPlanCard

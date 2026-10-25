@@ -1,5 +1,5 @@
-// Who the patient app is acting as. No login yet: ?as=<patientId>, else the id remembered in localStorage,
-// else p-maria. The "Who are you?" picker only shows with ?pick=1 or when the id is unknown.
+// Who the patient app is acting as. No login yet: ?as=<patientId>, else the id remembered in localStorage.
+// With neither (first visit, or after Sign out), ?pick=1, or an unknown id, the "Who are you?" picker shows.
 import { ChevronRight } from 'lucide-react';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { getPatients } from '../api';
@@ -11,7 +11,6 @@ import { cx } from '../ui/cx';
 import { Spinner } from '../ui/Spinner';
 import { useSpeakOnMount } from './voice/useVoice';
 
-export const DEFAULT_PATIENT_ID: string = import.meta.env.VITE_DEFAULT_PATIENT_ID || 'p-maria';
 const KEY = 'rehabtrack.patientId';
 
 export function storedPatientId(): string | null {
@@ -34,7 +33,7 @@ export function rememberPatientId(id: string | null) {
 /** The patient to act as on first render, or null to show the picker (?pick=1). */
 export function resolvePatientId(params: URLSearchParams, stored: string | null): string | null {
   if (params.get('pick') === '1') return null;
-  return params.get('as') || stored || DEFAULT_PATIENT_ID;
+  return params.get('as') || stored || null;
 }
 
 interface Identity {
@@ -64,7 +63,7 @@ export function usePatientList() {
       (list) => {
         if (cancelled) return;
         // The default demo patient first, then by name.
-        setPatients([...list].sort((a, b) => Number(b.id === DEFAULT_PATIENT_ID) - Number(a.id === DEFAULT_PATIENT_ID) || a.name.localeCompare(b.name)));
+        setPatients([...list].sort((a, b) => a.name.localeCompare(b.name)));
       },
       (e) => !cancelled && setError(e instanceof Error ? e.message : 'Could not load the patient list'),
     );
@@ -119,7 +118,7 @@ export function PatientChoice({ patient, onPick, current, compact }: { patient: 
     >
       <span className="font-semibold">{patient.name}</span>
       <span className="flex items-center gap-1 text-base text-text-muted">
-        {current ? 'You' : patient.id === DEFAULT_PATIENT_ID ? 'Default' : patient.id}
+        {current ? 'You' : patient.id}
         {!current && <ChevronRight className="h-5 w-5" aria-hidden />}
       </span>
     </button>

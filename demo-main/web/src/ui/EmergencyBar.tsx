@@ -1,6 +1,6 @@
 import { Phone, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
-import { Button } from './Button';
+import { Button, type ButtonProps } from './Button';
 import { cx } from './cx';
 import { Modal } from './Modal';
 
@@ -24,9 +24,20 @@ export interface EmergencyBarProps {
 }
 
 /**
- * Always-visible emergency actions for the patient header: a "Call 911" tel: link and a
- * "Stroke warning signs" button that opens the BE-FAST dialog. Both are ≥ var(--tap) tall.
- * On phones the signs button collapses to its icon (it keeps its accessible name).
+ * "Call 911" for the demo: a plain button that never dials (no tel: link). Pressing it only says so.
+ */
+export function Call911Button(props: Omit<ButtonProps, 'href' | 'onClick' | 'children' | 'variant'>) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <Button variant="danger" icon={<Phone />} {...props} onClick={() => setPressed(true)}>
+      {pressed ? 'Demo only: no call made' : 'Call 911'}
+    </Button>
+  );
+}
+
+/**
+ * Always-visible emergency action for the patient header: a "Stroke warning signs" button that opens
+ * the BE-FAST dialog (≥ var(--tap) tall). On phones it collapses to its icon (it keeps its accessible name).
  */
 export function EmergencyBar({ onSignsOpen, className }: EmergencyBarProps) {
   const [open, setOpen] = useState(false);
@@ -45,9 +56,6 @@ export function EmergencyBar({ onSignsOpen, className }: EmergencyBarProps) {
         className="px-3 sm:px-4"
       >
         <span className="hidden sm:inline">Stroke warning signs</span>
-      </Button>
-      <Button variant="danger" href="tel:911" icon={<Phone />} className="whitespace-nowrap px-3 sm:px-4">
-        Call 911
       </Button>
       <WarningSignsDialog open={open} onClose={() => setOpen(false)} />
     </div>
@@ -75,9 +83,7 @@ export function WarningSignsDialog({ open, onClose }: { open: boolean; onClose: 
       </ul>
       <p className="mt-4 text-lg">Note the time it started. Do not wait to see if it goes away.</p>
       <p className="mt-1 text-base text-text-muted">This app cannot detect a stroke.</p>
-      <Button variant="danger" size="xl" href="tel:911" icon={<Phone />} fullWidth className="mt-5">
-        Call 911
-      </Button>
+      <Call911Button size="xl" fullWidth className="mt-5" />
     </Modal>
   );
 }

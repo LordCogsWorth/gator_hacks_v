@@ -1,11 +1,12 @@
 // Pain 7+ or dizziness ends the session automatically (brief: "Safety stop").
 // The session is still uploaded with a stopReason, so the care team gets a safety-stop alert.
-import { Home, Phone } from 'lucide-react';
+import { Home } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import type { StopReason } from '../../types';
 import { Banner } from '../../ui/Banner';
 import { Button } from '../../ui/Button';
+import { Call911Button } from '../../ui/EmergencyBar';
 import { Card } from '../../ui/Card';
 import { useSession } from '../session/SessionContext';
 import { useSpeakOnMount } from '../voice/useVoice';
@@ -43,9 +44,7 @@ export function SafetyStop() {
         <p className="text-2xl">
           If you have <b>face drooping</b>, <b>arm weakness</b> or <b>trouble speaking</b>, call 911 now.
         </p>
-        <Button variant="danger" size="xl" href="tel:911" icon={<Phone />} className="mt-4">
-          Call 911
-        </Button>
+        <Call911Button size="xl" className="mt-4" />
       </Card>
       {hasSession &&
         (saveState.status === 'saved' ? (

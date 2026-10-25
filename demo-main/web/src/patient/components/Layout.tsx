@@ -1,5 +1,5 @@
 // Patient shell: sidebar (bottom tab bar on phones) with Home and My sessions; header with the greeting,
-// Voice, Theme and the always-visible 911 bar; footer with the data-source badge and the team line.
+// Voice, Theme, Sign out and the always-visible stroke warning signs button; footer with the data-source badge and the team line.
 import { History, LayoutDashboard, Volume2, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -8,10 +8,12 @@ import { Button } from '../../ui/Button';
 import { cx } from '../../ui/cx';
 import { SidebarToggle, useCollapsedSidebar } from '../../ui/CollapsibleSidebar';
 import { DataModeBadge } from '../../ui/DataModeBadge';
+import { SignOutButton } from '../../ui/SignOutButton';
 import { EmergencyBar, WARNING_SIGNS_SPEECH } from '../../ui/EmergencyBar';
 import { SupabaseHealthBanner } from '../../ui/SupabaseHealthBanner';
 import { ThemeToggle } from '../../ui/ThemeToggle';
 import { firstName } from '../api';
+import { rememberPatientId } from '../identity';
 import { DemoPanel } from '../demo';
 import { usePatientData } from '../PatientData';
 import { speak, useMuted } from '../voice/useVoice';
@@ -55,7 +57,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-border bg-surface px-2 py-2 sm:px-8 sm:py-4">
           <div className="flex flex-wrap items-center justify-between gap-1 sm:gap-4">
-            {/* Phones skip the logo so voice, theme and the 911 bar fit on one row. */}
+            {/* Phones skip the logo so voice, theme and the warning signs fit on one row. */}
             <div className="hidden sm:block lg:hidden">
               <BrandLockup compact />
             </div>
@@ -66,6 +68,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
               <VoiceToggle />
               <ThemeToggle area="patient" />
+              <SignOutButton onSignOut={() => rememberPatientId(null)} />
               <EmergencyBar onSignsOpen={() => speak(WARNING_SIGNS_SPEECH)} />
             </div>
           </div>

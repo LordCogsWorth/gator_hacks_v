@@ -3,7 +3,7 @@ import type { Exercise, Patient, Session } from '../../types';
 import { EXERCISE_LABELS } from '../../types';
 import { ChartCard, EXERCISE_SERIES, LegendItem, useChartTheme } from '../../ui';
 import { shortDate } from '../dates';
-import { chartProps, MARGIN } from './chartProps';
+import { chartProps, dotsOf, fitDomain, MARGIN } from './chartProps';
 
 const EXERCISES: Exercise[] = ['arm_raise', 'forward_reach', 'hand_open'];
 const round = (v: number | null | undefined) => (v == null ? null : Math.round(v));
@@ -25,12 +25,20 @@ export function CameraCharts({ sessions, patient, phaseTarget }: { sessions: Ses
     return row;
   });
 
+  // Each axis fitted to this patient's own range.
+  const symDomain = fitDomain([...rows.flatMap((r) => EXERCISES.map((ex) => r[ex] as number | null)), phaseTarget], {
+    lo: 0, hi: 120, step: 5, minSpan: 20,
+  });
+  const compDomain = fitDomain(rows.map((r) => r.compensation as number | null), { lo: 0, hi: 100, step: 5, minSpan: 10 });
+  const painDomain = fitDomain(rows.map((r) => r.pain as number | null), { lo: 0, hi: 10, step: 1, minSpan: 3 });
+  const tiredDomain = fitDomain(rows.map((r) => r.tiredness as number | null), { lo: 1, hi: 5, step: 1, minSpan: 2 });
+
   return (
     <div className="space-y-6">
       <ChartCard
         title="Symmetry by exercise"
         subtitle="Weak arm ÷ healthy arm × 100, per session"
-        height={280}
+        height={320}
         empty={empty}
         description="Symmetry percentage per exercise over time, with the phase target line"
         legend={
@@ -45,7 +53,7 @@ export function CameraCharts({ sessions, patient, phaseTarget }: { sessions: Ses
         <LineChart data={rows} margin={MARGIN}>
           <CartesianGrid {...p.grid} />
           <XAxis dataKey="date" {...p.axis} />
-          <YAxis domain={[0, 100]} unit="%" width={48} {...p.axis} />
+          <YAxis domain={symDomain} unit="%" width={48} allowDataOverflow {...p.axis} />
           <Tooltip {...p.tooltip} formatter={(v) => `${v}%`} />
           {phaseTarget != null && <ReferenceLine y={phaseTarget} stroke={t.target} strokeDasharray="6 4" strokeWidth={2} />}
           {EXERCISES.map((ex) => (
@@ -55,8 +63,8 @@ export function CameraCharts({ sessions, patient, phaseTarget }: { sessions: Ses
               dataKey={ex}
               name={EXERCISE_LABELS[ex]}
               stroke={t.series[EXERCISE_SERIES[ex]]}
-              strokeWidth={2.5}
-              dot={false}
+              strokeWidth={3}
+              dot={dotsOf(rows, ex)}
               connectNulls
             />
           ))}
@@ -74,9 +82,9 @@ export function CameraCharts({ sessions, patient, phaseTarget }: { sessions: Ses
           <LineChart data={rows} margin={MARGIN}>
             <CartesianGrid {...p.grid} />
             <XAxis dataKey="date" {...p.axis} />
-            <YAxis domain={[0, 100]} unit="%" width={48} {...p.axis} />
+            <YAxis domain={compDomain} unit="%" width={48} allowDataOverflow {...p.axis} />
             <Tooltip {...p.tooltip} formatter={(v) => `${v}%`} />
-            <Line type="monotone" dataKey="compensation" name="Compensation" stroke={t.warning} strokeWidth={2.5} dot={false} connectNulls />
+            <Line type="monotone" dataKey="compensation" name="Compensation" stroke={t.warning} strokeWidth={3} dot={dotsOf(rows, 'compensation')} connectNulls />
           </LineChart>
         </ChartCard>
 
@@ -95,19 +103,19 @@ export function CameraCharts({ sessions, patient, phaseTarget }: { sessions: Ses
           <LineChart data={rows} margin={MARGIN}>
             <CartesianGrid {...p.grid} />
             <XAxis dataKey="date" {...p.axis} />
-            <YAxis yAxisId="pain" domain={[0, 10]} allowDecimals={false} width={32} {...p.axis} />
-            <YAxis yAxisId="tired" orientation="right" domain={[1, 5]} allowDecimals={false} width={32} {...p.axis} />
+            <YAxis yAxisId="pain" domain={painDomain} allowDecimals={false} width={32} {...p.axis} />
+            <YAxis yAxisId="tired" orientation="right" domain={tiredDomain} allowDecimals={false} width={32} {...p.axis} />
             <Tooltip {...p.tooltip} />
-            <Line yAxisId="pain" type="monotone" dataKey="pain" name="Pain" stroke={t.danger} strokeWidth={2.5} dot={false} connectNulls />
+            <Line yAxisId="pain" type="monotone" dataKey="pain" name="Pain" stroke={t.danger} strokeWidth={3} dot={dotsOf(rows, 'pain')} connectNulls />
             <Line
               yAxisId="tired"
               type="monotone"
               dataKey="tiredness"
               name="Tiredness"
               stroke={t.info}
-              strokeWidth={2.5}
+              strokeWidth={3}
               strokeDasharray="6 3"
-              dot={false}
+              dot={dotsOf(rows, 'tiredness')}
               connectNulls
             />
           </LineChart>

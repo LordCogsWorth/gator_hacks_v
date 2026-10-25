@@ -5,7 +5,7 @@ import { Badge } from './Badge';
 import { Banner } from './Banner';
 import { Button } from './Button';
 import { readChartTheme } from './chartTheme';
-import { EmergencyBar } from './EmergencyBar';
+import { Call911Button, EmergencyBar } from './EmergencyBar';
 import { Delta, StatTile } from './StatTile';
 import { applyArea, areaForPath, getTheme, setTheme, THEME_STORAGE_PREFIX } from './theme';
 
@@ -89,10 +89,16 @@ describe('Banner / Badge / EmergencyBar', () => {
     expect(html(<Badge tone="warning">Compensation</Badge>)).toContain('text-text');
   });
 
-  it('emergency bar has a tel:911 link and the warning-signs button', () => {
+  it('emergency bar has the warning-signs button and no 911 link (demo)', () => {
     const out = html(<EmergencyBar />);
-    expect(out).toContain('href="tel:911"');
+    expect(out).not.toContain('tel:911');
     expect(out).toContain('Stroke warning signs');
+  });
+
+  it('the demo Call 911 button never dials', () => {
+    const out = html(<Call911Button />);
+    expect(out).toContain('Call 911');
+    expect(out).not.toContain('tel:');
   });
 });
 

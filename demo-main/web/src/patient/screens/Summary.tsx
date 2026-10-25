@@ -18,6 +18,8 @@ export function Summary() {
   const savedOnce = useRef(false);
   // Opened without doing a session (e.g. after a page refresh): nothing to show or save.
   const empty = !session.plan || (session.pain === null && session.results.length === 0);
+  // Every exercise skipped (or stopped before finishing one): there is nothing to send to the care team.
+  const nothingDone = session.results.length === 0;
 
   // Compare with the most recent session from about a week ago, using the history from
   // before today's session is saved (computed once, when the summary opens).
@@ -30,10 +32,16 @@ export function Summary() {
     }));
   });
   const first = lines.find((l) => l.today !== null);
-  useSpeakOnMount(empty ? '' : `Session complete. ${first ? sentence(first.name, first.today!, first.before) : ''} Well done.`);
+  useSpeakOnMount(
+    empty
+      ? ''
+      : nothingDone
+        ? 'No exercises were finished today, so there is nothing to send to your care team.'
+        : `Session complete. ${first ? sentence(first.name, first.today!, first.before) : ''} Well done.`,
+  );
 
   useEffect(() => {
-    if (savedOnce.current || empty) return;
+    if (savedOnce.current || empty || nothingDone) return;
     savedOnce.current = true;
     session.save().catch(() => {
       // Shown below from session.saveState.
@@ -64,10 +72,18 @@ export function Summary() {
         ))}
       </ul>
 
-      {saveState.status === 'saved' ? (
+      {nothingDone ? (
+        <Banner tone="info" title="No exercises finished today">
+          There's nothing to send to your care team. You can try again from Home whenever you're ready.
+        </Banner>
+      ) : saveState.status === 'saved' ? (
         <Banner tone="success" title="Sent to your care team">
           {streak !== null && `${streak} ${streak === 1 ? 'day' : 'days'} in a row. `}
           3D recordings sent: {saveState.outcome.replaysSent} of {saveState.outcome.replaysTotal}.
+        </Banner>
+      ) : saveState.status === 'failed' && !saveState.network ? (
+        <Banner tone="warning" title="Your session couldn't be saved.">
+          {saveState.error}
         </Banner>
       ) : saveState.status === 'failed' ? (
         <Banner

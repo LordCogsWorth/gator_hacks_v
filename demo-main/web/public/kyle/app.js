@@ -18,6 +18,8 @@ const SERIES = 60;
 const REPORT_KEY = 'kyleMobilityReport';
 
 const $ = (id) => document.getElementById(id);
+// Embedded in the RehabTrack patient session (index.html?embed=patient): exercise mode, see below.
+const EMBED = document.documentElement.classList.contains('embed');
 const statusEl = $('status');
 const video = $('video');
 const overlay = $('overlay');
@@ -127,6 +129,8 @@ const controls = new OrbitControls(cam3, renderer.domElement);
 controls.enableDamping = true;
 controls.minDistance = 0.4;
 controls.maxDistance = 6;
+// Embedded, the wheel scrolls the session page instead of zooming the model.
+controls.enableZoom = !EMBED;
 controls.target.set(0, 1.15, 0);
 
 scene.add(new THREE.HemisphereLight(0xfff4ee, 0x1e293b, 1.0));
@@ -808,6 +812,7 @@ function loop() {
     if (S.follow) updatePose(lm, wl);
     drawOverlay(lm);
     if (S.test.phase === 'recording') recordTestFrame(lm, wl);
+    if (EXM.on) exerciseFrame(lm, wl);
   } else {
     octx.clearRect(0, 0, overlay.width, overlay.height);
     S.bodyVisible = false;
@@ -904,11 +909,11 @@ function runTest() {
   });
 }
 
-function finishTest() {
+function finishTest(extra = {}) {
   const T = S.test;
   const side = (s) => (s.peak > 5 ? { peakDeg: Math.round(s.peak), pct: pct(s.peak, 180), plane: s.plane } : null);
   const L_ = side(T.side.L), R_ = side(T.side.R);
-  if (!L_ && !R_) {
+  if (!L_ && !R_ && !extra.reps) {
     setBanner('No arm movement detected', '--', 'Make sure your shoulders and elbows are in view, then click Analyze again.', 0);
     return;
   }
@@ -923,7 +928,8 @@ function finishTest() {
       watchSpeed: T.ws.length ? Math.max(...T.ws) : null,
       simulated: S.watch?.sessionId === 'simulated-session'
     },
-    heightCm: h ? Math.round(h.cm) : null
+    heightCm: h ? Math.round(h.cm) : null,
+    ...extra
   };
   localStorage.setItem(REPORT_KEY, JSON.stringify(report));
   S.report = report;
@@ -1188,6 +1194,7 @@ setInterval(() => {
 // Analyze button (camera is started by the inline script in index.html)
 // ============================================================
 async function analyze() {
+  if (EMBED) return toggleExercise();
   const btn = $('analyzeBtn');
   if (S.test.phase !== 'idle') return;
   btn.disabled = true;
@@ -1219,6 +1226,168 @@ async function analyze() {
   }
 }
 window.__analyze = analyze;
+
+// ============================================================
+// Exercise mode (embedded in the RehabTrack patient session)
+// The page sends the exercise, the two arms in order (stronger first) and the reps per arm. "Start Exercise"
+// counts reps on the first arm, then switches straight to the second; only after both arms does the muscle
+// analysis run (finishTest), so one arm is never compared with an arm that hasn't moved yet. "Pause" stops
+// counting and turns the camera off; the blue button then says "Resume". "Stop" pauses counting and asks the
+// page to check on the patient (the page may answer with resume). Messages to the page: rehabtrack:arm (arm
+// finished: side, reps, peakDeg), rehabtrack:stop, rehabtrack:reset, rehabtrack:skip, and the usual
+// rehabtrack:camera-report (publishReport) at the end.
+// ============================================================
+const EXM = { exercise: 'arm_raise', sides: ['R', 'L'], i: 0, target: 10, on: false, started: false, reps: 0, up: false, low: null, peak: 0, lastRep: 0, done: {} };
+// A rep: up past UP, then back down below DOWN. Shoulder raise angle (°), or hand openness (%) for hand_open.
+// Kept forgiving for stroke patients: a partial lift counts, and the arm only has to come part of the way
+// down (DOWN, or REP_DROP below that rep's peak, whichever is higher) before the next rep.
+const EXM_UP = { arm_raise: 40, forward_reach: 40, hand_open: 45 };
+const EXM_DOWN = { arm_raise: 25, forward_reach: 25, hand_open: 30 };
+const REP_DROP = { arm_raise: 25, forward_reach: 25, hand_open: 20 };
+// Ignore a "rep" sooner than this after the last one (tracking jitter around the thresholds).
+const REP_MIN_MS = 700;
+const armName = (k) => (k === 'L' ? 'left' : 'right');
+const toPage = (msg) => window.parent !== window && window.parent.postMessage(msg, location.origin);
+
+function exerciseUi() {
+  const side = EXM.sides[EXM.i];
+  const which = EXM.i === 0 ? 'stronger' : 'weaker';
+  const btn = $('analyzeBtn');
+  btn.disabled = EXM.on;
+  btn.textContent = EXM.on ? `Counting · ${EXM.reps}/${EXM.target}` : EXM.started ? '▶ Resume' : '▶ Start Exercise';
+  $('stopBtn').disabled = !EXM.on;
+  $('pauseBtn').disabled = !EXM.on;
+  // Greyed out until the exercise has been started.
+  $('resetBtn').disabled = !EXM.started;
+  $('skipBtn').disabled = !EXM.started;
+  if (EXM.on) setStatus(`Your ${which} ${armName(side)} arm: ${EXM.reps} of ${EXM.target} reps`);
+}
+
+async function toggleExercise() {
+  if (EXM.on) return;
+  const btn = $('analyzeBtn');
+  btn.disabled = true;
+  try {
+    startLoop();
+    if (!landmarker) {
+      setStatus('Loading body tracking (first time takes ~10 s)…');
+      await initLandmarker();
+    }
+    if (!EXM.started) {
+      resetSession();
+      hideBanner();
+      const T = S.test;
+      T.side = { L: { peak: 0, plane: 'abduction' }, R: { peak: 0, plane: 'abduction' } };
+      T.maxSpeed = 0;
+      T.hr = [];
+      T.ws = [];
+      Object.assign(EXM, { i: 0, reps: 0, up: false, low: null, done: {}, started: true });
+    }
+    EXM.on = true;
+  } catch (err) {
+    console.error(err);
+    setStatus(`Error: ${err.message}`);
+  } finally {
+    exerciseUi();
+  }
+}
+
+function exerciseFrame(lm, wl) {
+  recordTestFrame(lm, wl);
+  const side = EXM.sides[EXM.i];
+  const v = EXM.exercise === 'hand_open' ? HANDS[side]?.open ?? null : S.cur['shoulder' + side];
+  if (v == null) return;
+  const ex = EXM.exercise;
+  if (!EXM.up) {
+    // The next rep starts with a real lift: past UP, and REP_DROP above the lowest point since the last rep.
+    EXM.low = Math.min(EXM.low ?? v, v);
+    if (v >= Math.max(EXM_UP[ex], EXM.low + REP_DROP[ex])) Object.assign(EXM, { up: true, peak: v });
+    return;
+  }
+  EXM.peak = Math.max(EXM.peak, v);
+  if (v <= Math.max(EXM_DOWN[ex], EXM.peak - REP_DROP[ex])) {
+    Object.assign(EXM, { up: false, low: v });
+    const now = performance.now();
+    if (now - EXM.lastRep < REP_MIN_MS) return;
+    EXM.lastRep = now;
+    EXM.reps += 1;
+    exerciseUi();
+    if (EXM.reps >= EXM.target) armDone();
+  }
+}
+
+function armDone() {
+  const side = EXM.sides[EXM.i];
+  EXM.done[side] = EXM.reps;
+  toPage({ type: 'rehabtrack:arm', side, reps: EXM.reps, peakDeg: Math.round(S.test.side[side].peak) });
+  if (EXM.i === 0) {
+    Object.assign(EXM, { i: 1, reps: 0, up: false, low: null });
+    exerciseUi();
+    return;
+  }
+  Object.assign(EXM, { on: false, started: false, i: 0, reps: 0 });
+  exerciseUi();
+  setStatus('Both arms done. Here is your analysis.');
+  finishTest({ reps: EXM.done[EXM.sides[0]] + EXM.done[side], repsBySide: { ...EXM.done } });
+}
+
+function stopExercise() {
+  if (!EXM.on) return;
+  EXM.on = false;
+  exerciseUi();
+  setStatus('Paused.');
+  toPage({ type: 'rehabtrack:stop' });
+}
+
+/** Pause: stop counting and turn the camera off. "Resume" (the blue button) turns it back on and carries on.
+ *  The session page owns the camera for the whole session (so it is only asked for once): the video is
+ *  switched off here, not released. */
+function pauseExercise() {
+  if (!EXM.on) return;
+  EXM.on = false;
+  window.__camStream?.getTracks().forEach((t) => (window.parent.__rehabtrackGetCamera ? (t.enabled = false) : t.stop()));
+  window.__camStream = null;
+  video.srcObject = null;
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  exerciseUi();
+  setStatus('Paused. The camera is off. Press “Resume” to carry on.');
+}
+
+function skipExercise() {
+  Object.assign(EXM, { on: false, started: false, i: 0, reps: 0, up: false, low: null, done: {} });
+  exerciseUi();
+  toPage({ type: 'rehabtrack:skip' });
+}
+
+function resetExercise() {
+  Object.assign(EXM, { on: false, started: false, i: 0, reps: 0, up: false, low: null, done: {} });
+  resetSession();
+  hideBanner();
+  exerciseUi();
+  setStatus('Reset. Press “Start Exercise” to begin again with your stronger arm.');
+  toPage({ type: 'rehabtrack:reset' });
+}
+
+if (EMBED) {
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin) return;
+    if (e.data?.type === 'rehabtrack:resume') return void toggleExercise();
+    if (e.data?.type === 'rehabtrack:finished') return void document.documentElement.classList.add('finished');
+    if (e.data?.type !== 'rehabtrack:exercise') return;
+    const { exercise, sides, target } = e.data;
+    const same = exercise === EXM.exercise && target === EXM.target && sides.join() === EXM.sides.join();
+    if (same) return;
+    Object.assign(EXM, { exercise, sides, target, on: false, started: false, i: 0, reps: 0, up: false, low: null, done: {} });
+    exerciseUi();
+    setStatus('');
+  });
+  $('stopBtn').onclick = stopExercise;
+  $('pauseBtn').onclick = pauseExercise;
+  $('skipBtn').onclick = skipExercise;
+  $('summaryBtn').onclick = () => toPage({ type: 'rehabtrack:summary' });
+  exerciseUi();
+  setStatus('');
+}
 
 // ============================================================
 // Exercise alerts → Apple Watch (via ntfy on the iPhone)
@@ -1918,7 +2087,7 @@ function resetSession() {
   renderPanels();
   if (typeof refreshExercises === 'function' && $('exSelect').options.length) refreshExercises();
 }
-$('resetBtn').onclick = resetSession;
+$('resetBtn').onclick = () => (EMBED ? resetExercise() : resetSession());
 $('heightInput').addEventListener('input', renderPanels);
 
 // ============================================================
@@ -1927,4 +2096,4 @@ $('heightInput').addEventListener('input', renderPanels);
 resetSession();
 resize3();
 animate();
-setStatus('Ready. Click “Analyze”: camera + body tracking start, the 3D model follows you, then the arm-raise test runs.');
+if (!EMBED) setStatus('Ready. Click “Analyze”: camera + body tracking start, the 3D model follows you, then the arm-raise test runs.');

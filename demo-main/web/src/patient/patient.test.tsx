@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import type { Plan } from '../types';
 import { localDate, shortcutUpload } from './demo';
-import { DEFAULT_PATIENT_ID, resolvePatientId } from './identity';
+import { resolvePatientId } from './identity';
 import { isNewPlan } from './PatientData';
 import { TodayCard } from './screens/Dashboard';
 import { newClientKey } from './session/SessionContext';
@@ -27,7 +27,7 @@ const plan: Plan = {
 
 describe('resolvePatientId', () => {
   const q = (s: string) => new URLSearchParams(s);
-  it('defaults to p-maria', () => expect(resolvePatientId(q(''), null)).toBe(DEFAULT_PATIENT_ID));
+  it('shows the picker when nobody has been chosen yet', () => expect(resolvePatientId(q(''), null)).toBeNull());
   it('prefers ?as over the remembered id', () => expect(resolvePatientId(q('as=p-james'), 'p-priya')).toBe('p-james'));
   it('uses the remembered id', () => expect(resolvePatientId(q(''), 'p-priya')).toBe('p-priya'));
   it('shows the picker only with ?pick=1', () => {

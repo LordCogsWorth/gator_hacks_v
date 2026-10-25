@@ -14,13 +14,20 @@ export function BrandMark({ className = 'h-10 w-10' }: { className?: string }) {
   );
 }
 
-/** Mark + name (+ optional area label), for headers. */
+/** Mark + name (+ optional area label on the same line), for headers. */
 export function BrandLockup({ area, compact = false, className }: { area?: string; compact?: boolean; className?: string }) {
   return (
     <span className={cx('flex items-center gap-2.5', className)}>
       <BrandMark className={compact ? 'h-9 w-9' : 'h-10 w-10'} />
-      <span className={cx('font-brand text-xl font-bold tracking-tight text-text', compact && 'hidden sm:inline')}>{BRAND_NAME}</span>
-      {area && <span className="hidden text-base font-medium text-text-muted sm:inline">{area}</span>}
+      <span className="flex items-center gap-2 whitespace-nowrap">
+        <span className={cx('font-brand text-xl font-bold tracking-tight text-text', compact && 'hidden sm:inline')}>{BRAND_NAME}</span>
+        {area && (
+          <span className="hidden font-brand text-xl font-normal tracking-tight text-text-muted sm:inline">
+            <span aria-hidden className="mr-2">|</span>
+            {area}
+          </span>
+        )}
+      </span>
     </span>
   );
 }

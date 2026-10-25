@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react';
-import type { Plugin } from 'vite';
+import { loadEnv, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { gemmaMiddleware } from './gemma-proxy.mjs';
 
 // Kyle's live dashboard (public/kyle/, copied unchanged from Kyle/server/public) runs inside the
 // session screen. It calls its server with root paths (/app.js, /events, /session…), so:
@@ -26,12 +27,26 @@ function kyleDashboard(): Plugin {
   };
 }
 
+// POST /api/gemma for the care team's AI rehab plan (gemma-proxy.mjs). Reads GOOGLE_API_KEY / GEMMA_* from
+// web/.env.local or the environment, server side only (no VITE_ prefix, so it never reaches the browser).
+function gemmaApi(env: Record<string, string | undefined>): Plugin {
+  return {
+    name: 'gemma-api',
+    configureServer(server) {
+      server.middlewares.use(gemmaMiddleware(env));
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(gemmaMiddleware(env));
+    },
+  };
+}
+
 const kyleProxy = Object.fromEntries(
   KYLE_API.map((p) => [p, { target: KYLE_SERVER, changeOrigin: true, secure: true }]),
 );
 
-export default defineConfig({
-  plugins: [react(), kyleDashboard()],
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), kyleDashboard(), gemmaApi(loadEnv(mode, process.cwd(), ''))],
   server: {
     port: 5173,
     proxy: kyleProxy,
@@ -64,4 +79,4 @@ export default defineConfig({
     setupFiles: ['src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
   },
-});
+}));

@@ -36,4 +36,5 @@ export {
   type Density,
   type Theme,
 } from './theme';
+export { SignOutButton } from './SignOutButton';
 export { ThemeToggle, type ThemeToggleProps } from './ThemeToggle';
