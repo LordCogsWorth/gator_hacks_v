@@ -410,6 +410,22 @@ export function CurrentPlanCard({
     }
   }
 
+  /** Approve the current plan again: a fresh approved row the watch picks up (it polls Supabase) and buzzes for. */
+  async function onApproveSend() {
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await savePlan(patient.id, draftBody(draftFrom(plan, usableCheckin(patient.nextCheckin, today))));
+      const body = { title: 'New plan approved', message: `${saved.approvedBy} approved your phase ${saved.phase} plan.` };
+      void fetch('/alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
+      await onDone(`Plan approved by ${saved.approvedBy} and sent to ${patient.name}'s watch.`, saved.id);
+    } catch (e) {
+      setError(errorMessage(e, 'Could not approve the plan'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Card
       tone={justApproved ? 'primary' : 'default'}
@@ -420,9 +436,14 @@ export function CurrentPlanCard({
         <>
           {justApproved && <Badge tone="success">Just approved</Badge>}
           {!draft && (
-            <Button variant="secondary" icon={<Pencil />} onClick={startEdit}>
-              Edit plan
-            </Button>
+            <>
+              <Button icon={<Check />} loading={busy} onClick={onApproveSend}>
+                Approve plan
+              </Button>
+              <Button variant="secondary" icon={<Pencil />} onClick={startEdit}>
+                Edit plan
+              </Button>
+            </>
           )}
         </>
       }
@@ -463,6 +484,7 @@ export function CurrentPlanCard({
               </li>
             ))}
           </ul>
+          {error && <p className="mt-3 text-base text-danger">{error}</p>}
           <p className="mt-3 text-base text-text-muted">
             {plan.sessionsPerWeek} sessions / week · next check-in{' '}
             <span className="font-semibold text-text">{formatDay(patient.nextCheckin)}</span>

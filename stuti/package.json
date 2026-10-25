@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
+    "gemma": "node --env-file=.env server/public/gemma-server.mjs",
     "test": "node server/test_smoke.js"
   },
   "dependencies": {

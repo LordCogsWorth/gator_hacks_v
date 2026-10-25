@@ -113,10 +113,17 @@ function Run({ plan }: { plan: Plan }) {
   const toFrame = (msg: object) => frame.current?.contentWindow?.postMessage(msg, location.origin);
   const sendExercise = useCallback(() => {
     frame.current?.contentWindow?.postMessage(
-      { type: 'rehabtrack:exercise', exercise: info.id, sides: [toKey(healthySide), toKey(patient.weakSide)], target: reps },
+      {
+        type: 'rehabtrack:exercise',
+        exercise: info.id,
+        sides: [toKey(healthySide), toKey(patient.weakSide)],
+        target: reps,
+        // The plan's goal angle (e.g. side raise 90°): the dashboard's % is measured against it.
+        goalDeg: plan.exercises[index].target,
+      },
       location.origin,
     );
-  }, [info.id, healthySide, patient.weakSide, reps]);
+  }, [info.id, healthySide, patient.weakSide, reps, plan, index]);
   useEffect(sendExercise, [sendExercise]);
   // The dashboard asks for the camera through this page (public/kyle/index.html), so the browser's
   // permission prompt shows for the page itself rather than for the frame. The camera is asked for once, on the

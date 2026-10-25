@@ -122,6 +122,7 @@ final class WatchModel: NSObject, ObservableObject {
     }
 
     private func poll() async {
+        await pollCloudPlan()
         var comps = URLComponents(url: SERVER_URL.appendingPathComponent("watch/prompts"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [URLQueryItem(name: "after", value: String(lastSeq ?? 0))]
         do {
@@ -146,9 +147,52 @@ final class WatchModel: NSObject, ObservableObject {
 
     /// Fetch the approved care plan from the server.
     func loadPlan() async {
+        if await pollCloudPlan(notifyIfNew: false) { return }
         guard let (data, _) = try? await URLSession.shared.data(from: SERVER_URL.appendingPathComponent("plan")),
               let r = try? JSONDecoder().decode(PlanResponse.self, from: data) else { return }
         plan = r.plan
+    }
+
+    private var lastCloudPoll = Date.distantPast
+    /// Latest approved plan straight from Supabase (works without the Mac). A plan id not seen before
+    /// (the care team pressed "Approve plan") buzzes the watch and shows a notification.
+    @discardableResult
+    func pollCloudPlan(notifyIfNew: Bool = true) async -> Bool {
+        guard supabaseConfigured else { return false }
+        if notifyIfNew && Date().timeIntervalSince(lastCloudPoll) < 5 { return plan != nil }
+        lastCloudPoll = Date()
+        var comps = URLComponents(url: SUPABASE_URL.appendingPathComponent("rest/v1/plans"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [
+            URLQueryItem(name: "patient_id", value: "eq.\(PATIENT_ID)"),
+            URLQueryItem(name: "status", value: "eq.approved"),
+            URLQueryItem(name: "order", value: "approved_at.desc"),
+            URLQueryItem(name: "limit", value: "1"),
+        ]
+        var req = URLRequest(url: comps.url!)
+        req.setValue(SUPABASE_ANON_KEY, forHTTPHeaderField: "apikey")
+        req.setValue("Bearer \(SUPABASE_ANON_KEY)", forHTTPHeaderField: "Authorization")
+        guard let (data, _) = try? await URLSession.shared.data(for: req),
+              let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let row = rows.first, let id = row["id"] as? String else { return false }
+        let items = (row["exercises"] as? [[String: Any]] ?? []).compactMap { e -> CarePlan.Item? in
+            guard let ex = e["exercise"] as? String else { return nil }
+            return CarePlan.Item(exercise: ex, reps: (e["reps"] as? Int) ?? 10)
+        }
+        let p = CarePlan(id: id, approvedBy: row["approved_by"] as? String, approvedAt: row["approved_at"] as? String,
+                         phase: row["phase"] as? Int, exercises: items)
+        let seenKey = "lastSeenPlanId"
+        let seen = defaults.string(forKey: seenKey)
+        plan = p
+        defaults.set(id, forKey: seenKey)
+        if notifyIfNew, let seen, seen != id {
+            planIsNew = true
+            WKInterfaceDevice.current().play(.notification)
+            let note = Prompt(seq: 0, id: "plan-\(id)", title: "New plan approved",
+                              message: "\(p.approvedBy ?? "Your care team") approved your phase \(p.phase ?? 1) plan.")
+            pendingPrompt = note
+            if !isRecording { notify(note) }
+        }
+        return true
     }
 
     /// Start one exercise from the plan, with the plan's rep count.

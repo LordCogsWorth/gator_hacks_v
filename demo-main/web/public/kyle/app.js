@@ -54,6 +54,14 @@ function angleAt(a, b, c) {
   return (Math.acos(Math.min(1, Math.max(-1, dot))) * 180) / Math.PI;
 }
 const pct = (deg, rom) => Math.round(Math.min(1, Math.max(0, deg / rom)) * 100);
+// Arm-raise % is measured against the current exercise's goal angle (side raise 90°, forward reach 120°),
+// sent by the RehabTrack page; standalone it falls back to the full 180°.
+const DEFAULT_GOAL = { arm_raise: 90, forward_reach: 120 };
+let ARM_GOAL = 180;
+const armGoal = () => ARM_GOAL;
+function setArmGoal(exercise, goalDeg) {
+  ARM_GOAL = goalDeg > 0 && exercise !== 'hand_open' ? goalDeg : DEFAULT_GOAL[exercise] ?? 180;
+}
 const cls = (p) => (p >= 85 ? 'ok' : p >= 60 ? 'mid' : 'bad');
 const colorCss = (p) => (p >= 85 ? '#22c55e' : p >= 60 ? '#f59e0b' : '#ef4444');
 const vis = (lm, i) => lm[i].visibility ?? 1;
@@ -591,7 +599,7 @@ function animate() {
       el.style.display = 'none';
       continue;
     }
-    const p = pct(c, 180);
+    const p = pct(c, armGoal());
     el.textContent = `${s} ${p}%`;
     el.style.color = colorCss(p);
     putLabel(el, P[s === 'L' ? 13 : 14].clone().addScaledVector(fr.Up, 0.08));
@@ -742,7 +750,7 @@ function drawOverlay(lm) {
   octx.lineCap = 'round';
   const armCol = (side) => {
     const c = S.cur['shoulder' + side];
-    return c == null ? '#38bdf8' : colorCss(pct(c, 180));
+    return c == null ? '#38bdf8' : colorCss(pct(c, armGoal()));
   };
   for (const [a, b] of OVERLAY_CONN) {
     if (vis(lm, a) < 0.4 || vis(lm, b) < 0.4) continue;
@@ -898,7 +906,7 @@ function runTest() {
         return;
       }
       const best = Math.max(T.side.L.peak, T.side.R.peak);
-      setBanner('Recording', `${pct(best, 180)}%`, 'Raise BOTH arms as high as you can, hold 1 second, then lower.', (el / TEST_SECONDS) * 100);
+      setBanner('Recording', `${pct(best, armGoal())}%`, 'Raise BOTH arms as high as you can, hold 1 second, then lower.', (el / TEST_SECONDS) * 100);
       if (S.watch) {
         if (S.watch.heartRate != null) T.hr.push(S.watch.heartRate);
         T.ws.push(watchSpeed(S.watch));
@@ -911,7 +919,7 @@ function runTest() {
 
 function finishTest(extra = {}) {
   const T = S.test;
-  const side = (s) => (s.peak > 5 ? { peakDeg: Math.round(s.peak), pct: pct(s.peak, 180), plane: s.plane } : null);
+  const side = (s) => (s.peak > 5 ? { peakDeg: Math.round(s.peak), pct: pct(s.peak, armGoal()), plane: s.plane } : null);
   const L_ = side(T.side.L), R_ = side(T.side.R);
   if (!L_ && !R_ && !extra.reps) {
     setBanner('No arm movement detected', '--', 'Make sure your shoulders and elbows are in view, then click Analyze again.', 0);
@@ -1035,7 +1043,7 @@ function showDiagnosis(r) {
       ? `<div style="flex:1;min-width:150px;padding:12px;border-radius:10px;border:2px solid ${!ok && name === badName ? colorCss(s.pct) : '#1f2937'}">
           <div class="label">${name} arm</div>
           <div style="font-size:44px;font-weight:800;color:${colorCss(s.pct)}">${s.pct}%</div>
-          <div class="sub mono">${s.peakDeg}° of 180° · ${s.plane === 'flexion' ? 'forward' : 'side'} raise</div></div>`
+          <div class="sub mono">${s.peakDeg}° of ${armGoal()}° goal · ${s.plane === 'flexion' ? 'forward' : 'side'} raise</div></div>`
       : `<div style="flex:1;min-width:150px;padding:12px;border-radius:10px;border:1px solid #1f2937"><div class="label">${name} arm</div><div class="sub">not detected</div></div>`;
   const sideKey = badName === 'Left' ? 'L' : 'R';
   const top = muscles.filter((m) => m.side === sideKey && m.status !== 'normal').sort((a, b) => b.score - a.score).slice(0, 5);
@@ -1096,17 +1104,17 @@ function renderPanels() {
   for (const s of ['L', 'R']) {
     const c = S.cur['shoulder' + s];
     const pk = S.peak['shoulder' + s];
-    const p = c == null ? null : pct(c, 180);
+    const p = c == null ? null : pct(c, armGoal());
     $('arm' + s).textContent = p == null ? '--%' : `${p}%`;
     $('arm' + s).className = 'big ' + (p == null ? '' : cls(p));
     $('arm' + s + 'Bar').style.width = `${p ?? 0}%`;
     $('arm' + s + 'Bar').style.background = p == null ? '#1f2937' : colorCss(p);
-    $('arm' + s + 'Deg').textContent = `${c == null ? '--' : c.toFixed(0)}° of 180° · peak ${pk ? pct(pk, 180) + '%' : '--'}`;
+    $('arm' + s + 'Deg').textContent = `${c == null ? "--" : c.toFixed(0)}° of ${armGoal()}° · peak ${pk ? pct(pk, armGoal()) + '%' : '--'}`;
   }
   $('camSpeed').textContent = `${S.camSpeed.toFixed(0)} °/s`;
   $('camPeak').textContent = `${S.camPeak.toFixed(0)} °/s`;
   const best = Math.max(S.peak.shoulderL, S.peak.shoulderR);
-  $('armPeak').textContent = best ? `${pct(best, 180)}% (${best.toFixed(0)}°)` : '--';
+  $('armPeak').textContent = best ? `${pct(best, armGoal())}% (${best.toFixed(0)}°)` : '--';
   const h = heightCm();
   $('heightOut').textContent = h ? `${h.cm.toFixed(0)} cm · ${(h.cm / 30.48).toFixed(2)} ft (${h.src})` : '-- (enter it, or show full body)';
 
@@ -1374,7 +1382,9 @@ if (EMBED) {
     if (e.data?.type === 'rehabtrack:resume') return void toggleExercise();
     if (e.data?.type === 'rehabtrack:finished') return void document.documentElement.classList.add('finished');
     if (e.data?.type !== 'rehabtrack:exercise') return;
-    const { exercise, sides, target } = e.data;
+    const { exercise, sides, target, goalDeg } = e.data;
+    setArmGoal(exercise, goalDeg);
+    renderPanels();
     const same = exercise === EXM.exercise && target === EXM.target && sides.join() === EXM.sides.join();
     if (same) return;
     Object.assign(EXM, { exercise, sides, target, on: false, started: false, i: 0, reps: 0, up: false, low: null, done: {} });
