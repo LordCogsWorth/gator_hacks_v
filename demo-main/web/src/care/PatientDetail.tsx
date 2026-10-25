@@ -13,6 +13,7 @@ import { CameraCharts } from './sections/CameraCharts';
 import { CheckinControl } from './sections/CheckinControl';
 import { SessionList } from './sections/SessionList';
 import { WatchCharts } from './sections/WatchCharts';
+import { WatchSessionTable } from './sections/WatchSessionTable';
 import { WeeklySummaryCard } from './sections/WeeklySummaryCard';
 
 interface PageData {
@@ -200,6 +201,10 @@ export default function PatientDetail() {
 
       <Section title="Watch trends" subtitle="Daily Apple Watch data and watch exercise sessions">
         <WatchCharts watch={watch} watchSessions={watchSessions} patient={patient} />
+      </Section>
+
+      <Section title="Watch exercise rounds" subtitle="Every round recorded by the Apple Watch app">
+        <WatchSessionTable rows={watchSessions} patient={patient} />
       </Section>
 
       <Section title="Sessions">
