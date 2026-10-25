@@ -2,7 +2,8 @@
 import { ChevronDown, Home, Play } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Exercise, StopReason, WatchSession } from '../../types';
+import type { CameraAnalysis, Exercise, StopReason, WatchSession } from '../../types';
+import { CameraAnalysisView, useCameraAnalyses } from '../../ui/CameraAnalysisView';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { cx } from '../../ui/cx';
@@ -23,6 +24,7 @@ export function History() {
   const navigate = useNavigate();
   const { summaries, plan, patient } = usePatientData();
   const watchRounds = useWatchSessions(patient.id) ?? [];
+  const cameraRows = useCameraAnalyses(patient.id) ?? [];
   const sessions = [...summaries].reverse();
   // Columns: the plan's exercises (all three if there's no plan yet).
   const exercises = plan ? plan.exercises.map((e) => e.exercise) : (Object.keys(EXERCISES) as Exercise[]);
@@ -53,6 +55,7 @@ export function History() {
             s={s}
             exercises={exercises}
             watchRounds={watchRoundsFor(s, watchRounds)}
+            camera={cameraFor(s, cameraRows)}
             open={open === s.session.id}
             onToggle={() => setOpen(open === s.session.id ? null : s.session.id)}
           />
@@ -76,9 +79,22 @@ function watchRoundsFor(s: SessionSummary, rounds: WatchSession[]): WatchSession
     .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
 }
 
+/** Camera analyses run during this session (± 5 min). */
+function cameraFor(s: SessionSummary, rows: CameraAnalysis[]): CameraAnalysis[] {
+  const pad = 5 * 60_000;
+  const t0 = Date.parse(s.session.startedAt) - pad;
+  const t1 = Date.parse(s.session.endedAt) + pad;
+  return rows.filter((a) => {
+    const t = Date.parse(a.createdAt);
+    return t >= t0 && t <= t1;
+  });
+}
+
 function SessionCard({
-  s, exercises, watchRounds, open, onToggle,
-}: { s: SessionSummary; exercises: Exercise[]; watchRounds: WatchSession[]; open: boolean; onToggle: () => void }) {
+  s, exercises, watchRounds, camera, open, onToggle,
+}: {
+  s: SessionSummary; exercises: Exercise[]; watchRounds: WatchSession[]; camera: CameraAnalysis[]; open: boolean; onToggle: () => void;
+}) {
   const tired = TIREDNESS.find((t) => t.v === s.session.tiredness);
   const fromWatch = s.session.id.startsWith('watch-') || watchRounds.length > 0;
   // "Stopped early" only when nothing was recorded; a one-arm watch session still has results.
@@ -181,6 +197,13 @@ function SessionCard({
               <div className="text-lg font-semibold">⌚ Recorded by your Apple Watch</div>
               {watchRounds.map((w) => (
                 <WatchRound key={w.id} w={w} />
+              ))}
+            </div>
+          )}
+          {camera.length > 0 && (
+            <div className="space-y-5 border-t border-border pt-4">
+              {camera.map((a) => (
+                <CameraAnalysisView key={a.id} a={a} />
               ))}
             </div>
           )}

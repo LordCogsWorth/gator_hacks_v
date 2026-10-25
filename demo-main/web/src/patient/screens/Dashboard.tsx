@@ -10,7 +10,7 @@ import { Card } from '../../ui/Card';
 import { StatTile } from '../../ui/StatTile';
 import { daysUntil, firstName, streakDays, weekAgoSummary } from '../api';
 import { ProgressChart } from '../components/ProgressChart';
-import { WatchWorkouts } from '../components/WatchWorkouts';
+import { CameraResults, WatchWorkouts } from '../components/WatchWorkouts';
 import { EXERCISES } from '../data/exercises';
 import { usePatientData } from '../PatientData';
 import { useSession } from '../session/SessionContext';
@@ -102,6 +102,8 @@ export function Dashboard() {
       />
 
       <WatchWorkouts patientId={patient.id} />
+
+      <CameraResults patientId={patient.id} />
 
       <ProgressChart />
     </div>

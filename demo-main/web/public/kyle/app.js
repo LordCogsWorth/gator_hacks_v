@@ -933,6 +933,27 @@ function finishTest() {
   showDiagnosis(report);
   focusAffected();
   refreshExercises();
+  publishReport(report);
+}
+
+// Hand the finished Analyze result to the RehabTrack page that embeds this dashboard (it saves it to Supabase).
+function publishReport(report) {
+  try {
+    const joints = {};
+    for (const [k, j] of Object.entries(JOINTS)) {
+      const pk = S.peak[k];
+      joints[k] = { name: j.name, peakDeg: pk ? Math.round(pk) : null, pct: pk ? pct(pk, j.rom) : null };
+    }
+    const findings = muscles
+      .filter((m) => m.status !== 'normal')
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map((m) => ({ muscle: m.label, status: m.status, score: Math.round(m.score * 100), reason: m.reasons[0] || '' }));
+    const full = { ...report, peakArmSpeedDegS: Math.round(S.camPeak), joints, findings };
+    if (window.parent && window.parent !== window) window.parent.postMessage({ type: 'rehabtrack:camera-report', report: full }, location.origin);
+  } catch (e) {
+    console.warn('camera report not sent', e);
+  }
 }
 
 // Which muscles are likely involved, based on where each arm stopped.

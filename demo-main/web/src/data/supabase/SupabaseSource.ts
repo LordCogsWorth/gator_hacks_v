@@ -7,6 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   Alert,
   ApprovePlanBody,
+  CameraAnalysis,
   ExerciseResult,
   Patient,
   Plan,
@@ -69,6 +70,9 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 const omitUndefined = (o: Json) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+/** watch_sessions rows with this session-id prefix hold camera Analyze results, not watch rounds. */
+const CAMERA_PREFIX = 'camera-';
 
 /** Watch rounds within this gap of each other count as one session. */
 const WATCH_GROUP_GAP_MS = 30 * 60_000;
@@ -230,7 +234,7 @@ export class SupabaseSource implements DataSource {
   /** watch_sessions rows (no trace); [] if the table is unavailable so camera data still loads. */
   private async watchSessionRows(c: SupabaseClient, patientId?: string): Promise<Json[]> {
     try {
-      let query = c.from('watch_sessions').select(WATCH_SESSION_COLUMNS);
+      let query = c.from('watch_sessions').select(WATCH_SESSION_COLUMNS).not('session_id', 'like', `${CAMERA_PREFIX}%`);
       if (patientId) query = query.eq('patient_id', patientId);
       return (await q<Json[]>(query.order('started_at') as unknown as Result<Json[]>)) ?? [];
     } catch (e) {
@@ -266,10 +270,50 @@ export class SupabaseSource implements DataSource {
       c.from('watch_sessions')
         .select(WATCH_SESSION_COLUMNS)
         .eq('patient_id', patientId)
+        .not('session_id', 'like', `${CAMERA_PREFIX}%`)
         .order('started_at', { ascending: false })
         .limit(50) as unknown as Result<Json[]>,
     );
     return (rows ?? []).map(watchSessionFromRow);
+  }
+
+  /**
+   * Camera Analyze results are stored in watch_sessions (same RPC, same anon key, no schema change) with a
+   * "camera-" session id; the full report lives in `trace` ({ source: 'camera', analysis }).
+   */
+  async saveCameraAnalysis(a: Omit<CameraAnalysis, 'id'>): Promise<void> {
+    const best = Math.max(a.shoulder.L?.peakDeg ?? 0, a.shoulder.R?.peakDeg ?? 0);
+    await this.rpc('submit_watch_session', {
+      sessionId: `${CAMERA_PREFIX}${crypto.randomUUID()}`,
+      patientId: a.patientId,
+      exercise: a.exercise === 'forward_reach' ? 'forward_reach' : 'arm_raise',
+      arm: a.arm,
+      startedAt: a.createdAt,
+      endedAt: a.createdAt,
+      bestElevationDeg: best,
+      avgHr: a.heartRate,
+      completed: true,
+      trace: { source: 'camera', analysis: a },
+    });
+    this.changed(undefined);
+  }
+
+  async listCameraAnalyses(patientId: string): Promise<CameraAnalysis[]> {
+    const c = await this.c();
+    const rows = await q<Json[]>(
+      c.from('watch_sessions')
+        .select('session_id, patient_id, started_at, trace')
+        .eq('patient_id', patientId)
+        .like('session_id', `${CAMERA_PREFIX}%`)
+        .order('started_at', { ascending: false })
+        .limit(50) as unknown as Result<Json[]>,
+    );
+    return (rows ?? [])
+      .map((r) => {
+        const a = (r.trace as Json | null)?.analysis as Omit<CameraAnalysis, 'id'> | undefined;
+        return a ? { ...a, id: String(r.session_id), patientId: String(r.patient_id), createdAt: String(r.started_at) } : null;
+      })
+      .filter((a): a is CameraAnalysis => a !== null);
   }
 
   async insertSession(body: SessionUploadBody): Promise<{ session: SessionRow; results: ExerciseResult[] }> {

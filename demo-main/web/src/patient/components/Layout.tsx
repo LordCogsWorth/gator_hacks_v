@@ -3,9 +3,10 @@
 import { History, LayoutDashboard, Volume2, VolumeX } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { BRAND_NAME, BrandLockup, TEAM_LINE } from '../../Brand';
+import { BRAND_NAME, BrandLockup, BrandMark, TEAM_LINE } from '../../Brand';
 import { Button } from '../../ui/Button';
 import { cx } from '../../ui/cx';
+import { SidebarToggle, useCollapsedSidebar } from '../../ui/CollapsibleSidebar';
 import { DataModeBadge } from '../../ui/DataModeBadge';
 import { EmergencyBar, WARNING_SIGNS_SPEECH } from '../../ui/EmergencyBar';
 import { SupabaseHealthBanner } from '../../ui/SupabaseHealthBanner';
@@ -32,16 +33,23 @@ export function Layout({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { patient, connectionError } = usePatientData();
   const [title, subtitle] = TITLES[pathname] ?? [`Hello, ${firstName(patient.name)}!`, "Here's how your recovery is going."];
+  const [collapsed, toggleSidebar] = useCollapsedSidebar('rehabtrack.patientSidebar', pathname === '/patient/session');
 
   return (
     <div className="min-h-screen bg-bg text-text lg:flex">
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-border bg-surface p-5 lg:flex">
-        <BrandLockup />
+      <aside
+        className={cx(
+          'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-border bg-surface transition-[width] lg:flex',
+          collapsed ? 'w-20 p-3' : 'w-64 p-5',
+        )}
+      >
+        {collapsed ? <BrandMark /> : <BrandLockup />}
         <nav aria-label="Main" className="mt-8 flex flex-col gap-1">
           {NAV.map((n) => (
-            <NavItem key={n.to} {...n} />
+            <NavItem key={n.to} {...n} collapsed={collapsed} />
           ))}
         </nav>
+        <SidebarToggle collapsed={collapsed} onToggle={toggleSidebar} />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -75,7 +83,7 @@ export function Layout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <main className="w-full max-w-7xl flex-1 px-4 pb-6 pt-4 sm:px-8 sm:pt-6">
+        <main className={cx('w-full flex-1 px-4 pb-6 pt-4 sm:px-8 sm:pt-6', !collapsed && 'max-w-7xl')}>
           <SupabaseHealthBanner className="mb-4" />
           {connectionError && (
             <p className="mb-4 rounded-card border border-warning/60 bg-warning-soft px-4 py-3 text-lg text-text" role="status">
@@ -99,20 +107,23 @@ export function Layout({ children }: { children: ReactNode }) {
   );
 }
 
-function NavItem({ to, label, icon: Icon, end }: (typeof NAV)[number]) {
+function NavItem({ to, label, icon: Icon, end, collapsed }: (typeof NAV)[number] & { collapsed?: boolean }) {
   return (
     <NavLink
       to={to}
       end={end}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
       className={({ isActive }) =>
         cx(
-          'flex min-h-tap shrink-0 items-center gap-3 rounded-control px-4 text-lg font-semibold no-underline transition-colors',
+          'flex min-h-tap shrink-0 items-center gap-3 rounded-control text-lg font-semibold no-underline transition-colors',
+          collapsed ? 'justify-center px-0' : 'px-4',
           isActive ? 'bg-primary-soft text-text ring-1 ring-inset ring-primary/40' : 'text-text-muted hover:bg-text/[0.06] hover:text-text',
         )
       }
     >
       <Icon className="h-5 w-5" aria-hidden />
-      {label}
+      {!collapsed && label}
     </NavLink>
   );
 }

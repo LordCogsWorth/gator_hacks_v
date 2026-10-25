@@ -1,8 +1,9 @@
 // Everything the Apple Watch recorded: reps, attempts, best arm angle, heart rate and time, per round.
-import { Watch } from 'lucide-react';
+import { Camera, Watch } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { getPatientWatchSessions, onDataChange } from '../../api';
 import type { WatchSession } from '../../types';
+import { CameraAnalysisView, useCameraAnalyses } from '../../ui/CameraAnalysisView';
 import { Card } from '../../ui/Card';
 
 const EX_TITLE: Record<WatchSession['exercise'], string> = {
@@ -64,6 +65,17 @@ export function WatchRound({ w }: { w: WatchSession }) {
         <Stat label="Finished" value={w.completed == null ? '—' : w.completed ? 'Yes ✓' : 'Not all reps'} />
       </div>
     </div>
+  );
+}
+
+/** Home card: the latest camera Analyze result. */
+export function CameraResults({ patientId }: { patientId: string }) {
+  const rows = useCameraAnalyses(patientId);
+  if (!rows || rows.length === 0) return null;
+  return (
+    <Card icon={<Camera />} title="From the camera" subtitle={`${rows.length} ${rows.length === 1 ? 'analysis' : 'analyses'} saved · latest below`}>
+      <CameraAnalysisView a={rows[0]} />
+    </Card>
   );
 }
 

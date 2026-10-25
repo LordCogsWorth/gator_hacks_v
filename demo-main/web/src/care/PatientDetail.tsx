@@ -14,6 +14,23 @@ import { CheckinControl } from './sections/CheckinControl';
 import { SessionList } from './sections/SessionList';
 import { WatchCharts } from './sections/WatchCharts';
 import { WatchSessionTable } from './sections/WatchSessionTable';
+import { CameraAnalysisView, useCameraAnalyses } from '../ui/CameraAnalysisView';
+
+/** Newest first; the latest is shown in full, older ones as compact rows. */
+function CameraAnalysesList({ patientId }: { patientId: string }) {
+  const rows = useCameraAnalyses(patientId);
+  if (rows === null) return <p className="text-text-muted">Loading…</p>;
+  if (rows.length === 0) return <p className="text-text-muted">No camera analyses yet. They appear when the patient clicks Analyze during a session.</p>;
+  return (
+    <div className="space-y-4">
+      {rows.map((a, i) => (
+        <div key={a.id} className="rounded-card border border-border bg-surface p-4">
+          <CameraAnalysisView a={a} compact={i > 0} />
+        </div>
+      ))}
+    </div>
+  );
+}
 import { WeeklySummaryCard } from './sections/WeeklySummaryCard';
 
 interface PageData {
@@ -205,6 +222,10 @@ export default function PatientDetail() {
 
       <Section title="Watch exercise rounds" subtitle="Every round recorded by the Apple Watch app">
         <WatchSessionTable rows={watchSessions} patient={patient} />
+      </Section>
+
+      <Section title="Camera analyses" subtitle="Every Analyze run from the patient's camera: arm raise, joint ranges, likely weak muscles">
+        <CameraAnalysesList patientId={patient.id} />
       </Section>
 
       <Section title="Sessions">

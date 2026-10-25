@@ -26,6 +26,7 @@ import type {
     Alert,
     ApiConfig,
     ApprovePlanBody,
+    CameraAnalysis,
     DataMode,
     Exercise,
     Patient,
@@ -189,6 +190,17 @@ export function getConfig(): Promise<ApiConfig> {
 /** Apple Watch exercise sessions, newest first, max 50, no trace. */
 export function getPatientWatchSessions(id: string): Promise<WatchSession[]> {
   return getSource().listWatchSessions(id);
+}
+
+/** Camera Analyze results, newest first ([] when the data source doesn't store them). */
+export function getPatientCameraAnalyses(id: string): Promise<CameraAnalysis[]> {
+  const s = getSource();
+  return s.listCameraAnalyses ? s.listCameraAnalyses(id) : Promise.resolve([]);
+}
+
+export async function saveCameraAnalysis(a: Omit<CameraAnalysis, 'id'>): Promise<void> {
+  const s = getSource();
+  if (s.saveCameraAnalysis) await s.saveCameraAnalysis(a);
 }
 
 /** Clinician edits the plan without a suggestion → a new approved plan (any open suggestion is dismissed). */

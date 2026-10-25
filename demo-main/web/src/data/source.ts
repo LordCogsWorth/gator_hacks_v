@@ -2,6 +2,7 @@
 import type {
   Alert,
   ApprovePlanBody,
+  CameraAnalysis,
   DataMode,
   Exercise,
   ExerciseResult,
@@ -59,6 +60,9 @@ export interface DataSource {
   loadAllSnapshots(): Promise<Snapshot[]>;
   /** Newest first, max 50, no trace. */
   listWatchSessions(patientId: string): Promise<WatchSession[]>;
+  /** Camera Analyze results (online only; optional). */
+  listCameraAnalyses?(patientId: string): Promise<CameraAnalysis[]>;
+  saveCameraAnalysis?(a: Omit<CameraAnalysis, 'id'>): Promise<void>;
   /** Idempotent on clientKey. */
   insertSession(body: SessionUploadBody): Promise<{ session: SessionRow; results: ExerciseResult[] }>;
   putReplay(sessionId: string, replay: ReplayFile, summary: Omit<ReplayRow, 'path' | 'uploadedAt'>): Promise<ReplayRow>;

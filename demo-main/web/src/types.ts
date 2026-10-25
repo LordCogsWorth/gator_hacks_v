@@ -255,6 +255,24 @@ export interface WatchDaily {
 /** submitWatchDaily() body: merge semantics — omitted fields keep their previous value. */
 export type WatchDailyUpload = { patientId: string; date: string } & Partial<Omit<WatchDaily, 'id' | 'patientId' | 'date'>>;
 
+/** One camera "Analyze" result (arm-raise test, joint ranges, likely weak muscles). */
+export interface CameraAnalysis {
+  id: string;
+  patientId: string;
+  createdAt: string;
+  /** Exercise/arm being done in the session when Analyze ran, if any. */
+  exercise: Exercise | null;
+  arm: BodySide | null;
+  shoulder: Record<'L' | 'R', { peakDeg: number; pct: number; plane: string } | null>;
+  maxArmSpeedDegS: number | null;
+  peakArmSpeedDegS: number | null;
+  heartRate: number | null;
+  wristSpeed: number | null;
+  heightCm: number | null;
+  joints: Record<string, { name: string; peakDeg: number | null; pct: number | null }>;
+  findings: { muscle: string; status: string; score: number; reason: string }[];
+}
+
 /** One exercise session recorded by the Apple Watch app (Route B), without its trace. */
 export interface WatchSession {
   id: string;
